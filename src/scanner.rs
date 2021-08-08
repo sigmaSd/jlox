@@ -189,11 +189,11 @@ impl Scanner {
 #[derive(Debug, Clone)]
 pub struct Token {
     ttype: TokenType,
-    lexeme: String,
+    pub lexeme: String,
     line: usize,
 }
 impl Token {
-    fn new(ttype: TokenType, lexeme: String, line: usize) -> Self {
+    pub fn new(ttype: TokenType, lexeme: String, line: usize) -> Self {
         Self {
             ttype,
             lexeme,

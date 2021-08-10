@@ -4,7 +4,7 @@ macro_rules! ast {
     ($($ast_expr: ident => $($field: ident $type: ty)+,)+) => {
                 $(
         pub struct $ast_expr {
-            $($field: $type,)+
+            $(pub $field: $type,)+
         })+
             pub enum Expr {
                 $(
@@ -38,7 +38,7 @@ trait Visit<R> {
     fn visit_unary_expr(&self, expr: &Unary) -> R;
 }
 
-struct AstPrinter {}
+pub struct AstPrinter {}
 impl Visit<String> for AstPrinter {
     fn visit_binary_expr(&self, expr: &Binary) -> String {
         self.parenthesize(&expr.operator.lexeme, [&expr.left, &expr.right])
@@ -61,7 +61,7 @@ impl Visit<String> for AstPrinter {
 }
 
 impl AstPrinter {
-    fn print(&self, expr: Expr) -> String {
+    pub fn print(&self, expr: Expr) -> String {
         expr.accept(self)
     }
 

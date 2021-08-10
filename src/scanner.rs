@@ -131,9 +131,10 @@ impl Scanner {
         while self.peek().is_ldigit() {
             self.advance();
         }
-        self.add_token(TokenType::NUMBER(
+        self.add_token_with_literal(
+            TokenType::NUMBER,
             self.source[self.start..self.current].parse().unwrap(),
-        ));
+        );
     }
     fn string(&mut self) {
         while self.peek() != Some('"') && !self.is_at_end() {
@@ -150,7 +151,7 @@ impl Scanner {
         assert_eq!(self.advance(), '"');
 
         let value = self.source[self.start + 1..self.current - 1].to_string();
-        self.add_token(TokenType::STRING(value));
+        self.add_token_with_literal(TokenType::STRING, value);
     }
     fn peek(&self) -> Option<char> {
         if self.is_at_end() {
@@ -184,20 +185,40 @@ impl Scanner {
         let text = self.source[self.start..self.current].to_string();
         self.tokens.push(Token::new(ttype, text, self.line));
     }
+    fn add_token_with_literal(&mut self, ttype: TokenType, literal: String) {
+        let text = self.source[self.start..self.current].to_string();
+        self.tokens
+            .push(Token::new_with_literal(ttype, text, self.line, literal));
+    }
 }
 
 #[derive(Debug, Clone)]
 pub struct Token {
-    ttype: TokenType,
+    pub ttype: TokenType,
     pub lexeme: String,
-    line: usize,
+    pub literal: Option<String>,
+    pub line: usize,
 }
 impl Token {
+    pub fn new_with_literal(
+        ttype: TokenType,
+        lexeme: String,
+        line: usize,
+        literal: String,
+    ) -> Self {
+        Self {
+            ttype,
+            lexeme,
+            line,
+            literal: Some(literal),
+        }
+    }
     pub fn new(ttype: TokenType, lexeme: String, line: usize) -> Self {
         Self {
             ttype,
             lexeme,
             line,
+            literal: None,
         }
     }
 }
@@ -209,7 +230,7 @@ impl Display for Token {
 
 #[allow(non_camel_case_types)]
 #[allow(clippy::upper_case_acronyms)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TokenType {
     // Single-character tokens.
     LEFT_PAREN,
@@ -236,8 +257,8 @@ pub enum TokenType {
 
     // Literals.
     IDENTIFIER,
-    STRING(String),
-    NUMBER(f64),
+    STRING,
+    NUMBER,
 
     // Keywords.
     AND,

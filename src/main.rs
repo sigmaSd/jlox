@@ -4,8 +4,12 @@ use std::{
     process::exit,
 };
 mod scanner;
+use parser::Parser;
 use scanner::Scanner;
+
+use crate::expr::AstPrinter;
 mod expr;
+mod parser;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 fn main() -> Result<()> {
@@ -22,13 +26,13 @@ fn main() -> Result<()> {
 }
 
 struct Lox {
-    scanner: Option<Scanner>,
+    _scanner: Option<Scanner>,
     had_error: Cell<bool>,
 }
 impl Lox {
     fn new() -> Self {
         Self {
-            scanner: None,
+            _scanner: None,
             had_error: Cell::new(false),
         }
     }
@@ -39,10 +43,11 @@ impl Lox {
     }
 
     fn run(&self, code: &str) {
+        // scanner
         let mut scanner = Scanner::new(code.to_string());
         let tokens = scanner.scan_tokens();
 
-        for token in tokens {
+        for token in &tokens {
             println!("{:?}", token);
         }
 
@@ -50,6 +55,17 @@ impl Lox {
         if self.had_error.get() {
             exit(65);
         }
+
+        // parser
+        let mut parser = Parser::new(tokens);
+        let expr = parser.parse();
+
+        self.check_for_error(&scanner);
+        if self.had_error.get() {
+            exit(65);
+        }
+
+        println!("{}", AstPrinter {}.print(*expr))
     }
     fn check_for_error(&self, may_contain_error: &dyn LError) {
         self.had_error
@@ -68,6 +84,7 @@ impl Lox {
             }
             self.run(code);
             self.had_error.set(false);
+            line.clear();
         }
         Ok(())
     }
@@ -84,8 +101,13 @@ pub trait LError {
         self.report(line, None, message);
     }
 
-    fn report(&self, line: usize, wheres: Option<&str>, message: &str) {
-        eprintln!("[line {}] Error{}: {}", line, wheres.unwrap_or(""), message);
+    fn report(&self, line: usize, wheres: Option<String>, message: &str) {
+        eprintln!(
+            "[line {}] Error{}: {}",
+            line,
+            wheres.unwrap_or_else(|| "".into()),
+            message
+        );
         self.had_error().set(true);
     }
 }

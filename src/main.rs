@@ -4,11 +4,12 @@ use std::{
     process::exit,
 };
 mod scanner;
+use interpreter::Interpreter;
 use parser::Parser;
 use scanner::Scanner;
 
-use crate::expr::AstPrinter;
 mod expr;
+mod interpreter;
 mod parser;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
@@ -65,7 +66,13 @@ impl Lox {
             exit(65);
         }
 
-        println!("{}", AstPrinter {}.print(*expr))
+        let mut interpreter = Interpreter::new();
+        interpreter.interpret(&expr);
+        self.check_for_error(&scanner);
+        if self.had_error.get() {
+            exit(70);
+        }
+        //println!("{}", AstPrinter {}.print(*expr))
     }
     fn check_for_error(&self, may_contain_error: &dyn LError) {
         self.had_error

@@ -21,7 +21,7 @@ Unary => operator Token right Box<Expr>,
 );
 
 impl Expr {
-    fn accept<R>(&self, visitor: &dyn Visit<R>) -> R {
+    pub fn accept<R>(&self, visitor: &dyn Visit<R>) -> R {
         match self {
             Expr::Binary(binary) => visitor.visit_binary_expr(binary),
             Expr::Grouping(group) => visitor.visit_grouping_expr(group),
@@ -31,7 +31,7 @@ impl Expr {
     }
 }
 
-trait Visit<R> {
+pub trait Visit<R> {
     fn visit_binary_expr(&self, expr: &Binary) -> R;
     fn visit_grouping_expr(&self, expr: &Grouping) -> R;
     fn visit_literal_expr(&self, expr: &Literal) -> R;
@@ -60,6 +60,7 @@ impl Visit<String> for AstPrinter {
     }
 }
 
+#[allow(dead_code)]
 impl AstPrinter {
     pub fn print(&self, expr: Expr) -> String {
         expr.accept(self)

@@ -1,6 +1,10 @@
-use std::{cell::Cell, str::FromStr};
+use std::{
+    cell::{Cell, RefCell},
+    rc::Rc,
+    str::FromStr,
+};
 
-use crate::{expr::Visit, scanner::TokenType, LError};
+use crate::{environment::Environment, expr, scanner::TokenType, stmt, LError};
 
 macro_rules! obj {
     ($e: expr) => {
@@ -10,9 +14,37 @@ macro_rules! obj {
 
 pub struct Interpreter {
     had_error: Cell<bool>,
+    environment: Rc<RefCell<Environment>>,
 }
-impl Visit<Object> for Interpreter {
-    fn visit_binary_expr(&self, expr: &crate::expr::Binary) -> Object {
+impl stmt::Visit<()> for Interpreter {
+    fn visit_expression_stmt(&mut self, stmt: &stmt::Expression) {
+        self.evaluate(&stmt.expression);
+    }
+
+    fn visit_print_stmt(&mut self, stmt: &stmt::Print) {
+        let value = self.evaluate(&stmt.expression);
+        println!("{}", stringify(value));
+    }
+
+    fn visit_var_stmt(&mut self, stmt: &stmt::Var) {
+        let mut value = None;
+        if let Some(ref initializer) = stmt.initializer {
+            value = Some(self.evaluate(initializer));
+        }
+        self.environment
+            .borrow_mut()
+            .define(stmt.name.lexeme.clone(), value);
+    }
+
+    fn visit_block_stmt(&mut self, stmt: &stmt::Block) {
+        self.execute_block(
+            &stmt.statements,
+            Environment::new(Some(self.environment.clone())),
+        );
+    }
+}
+impl expr::Visit<Object> for Interpreter {
+    fn visit_binary_expr(&mut self, expr: &crate::expr::Binary) -> Object {
         let right = self.evaluate(&expr.right);
         let left = self.evaluate(&expr.left);
 
@@ -59,15 +91,15 @@ impl Visit<Object> for Interpreter {
         }
     }
 
-    fn visit_grouping_expr(&self, expr: &crate::expr::Grouping) -> Object {
+    fn visit_grouping_expr(&mut self, expr: &crate::expr::Grouping) -> Object {
         self.evaluate(&expr.expression)
     }
 
-    fn visit_literal_expr(&self, expr: &crate::expr::Literal) -> Object {
+    fn visit_literal_expr(&mut self, expr: &crate::expr::Literal) -> Object {
         obj!(expr.value.as_ref().unwrap())
     }
 
-    fn visit_unary_expr(&self, expr: &crate::expr::Unary) -> Object {
+    fn visit_unary_expr(&mut self, expr: &crate::expr::Unary) -> Object {
         let right = self.evaluate(&expr.right);
         match expr.operator.ttype {
             TokenType::MINUS => {
@@ -78,6 +110,18 @@ impl Visit<Object> for Interpreter {
 
             _ => unreachable!(),
         }
+    }
+
+    fn visit_variable_expr(&mut self, expr: &expr::Variable) -> Object {
+        self.environment.borrow().get(&expr.name)
+    }
+
+    fn visit_assign_expr(&mut self, expr: &expr::Assign) -> Object {
+        let value = self.evaluate(&expr.value);
+        self.environment
+            .borrow_mut()
+            .assign(expr.name.clone(), value.clone());
+        value
     }
 }
 
@@ -103,15 +147,31 @@ impl Interpreter {
     pub fn new() -> Self {
         Self {
             had_error: Cell::new(false),
+            environment: Rc::new(RefCell::new(Environment::new(None))),
         }
     }
 
-    fn evaluate(&self, expression: &crate::expr::Expr) -> Object {
+    fn evaluate(&mut self, expression: &crate::expr::Expr) -> Object {
         expression.accept(self)
     }
-    pub fn interpret(&mut self, expression: &crate::expr::Expr) {
-        let value = self.evaluate(expression);
-        println!("{}", stringify(value));
+    pub fn interpret(&mut self, statements: Vec<crate::stmt::Stmt>) {
+        for stmt in statements {
+            self.execute(&stmt);
+        }
+    }
+
+    fn execute(&mut self, stmt: &crate::stmt::Stmt) {
+        stmt.accept(self);
+    }
+
+    /// Execute a block using a new empty environment with our original environment as enclosing
+    fn execute_block(&mut self, statements: &[stmt::Stmt], environment: Environment) {
+        let previous = self.environment.clone();
+        self.environment = Rc::new(RefCell::new(environment));
+        for statement in statements {
+            self.execute(statement);
+        }
+        self.environment = previous;
     }
 }
 fn stringify(obj: Object) -> String {
@@ -123,15 +183,16 @@ fn stringify(obj: Object) -> String {
     }
 }
 
-pub struct Object(String);
+#[derive(Clone, Debug)]
+pub struct Object(pub String);
 impl Object {
-    fn downcast<T: FromStr>(&self) -> T {
+    pub fn downcast<T: FromStr>(&self) -> T {
         self.try_downcast().unwrap()
     }
-    fn try_downcast<T: FromStr>(&self) -> Option<T> {
+    pub fn try_downcast<T: FromStr>(&self) -> Option<T> {
         self.0.parse().ok()
     }
-    fn is<T: FromStr>(&self) -> bool {
+    pub fn is<T: FromStr>(&self) -> bool {
         self.try_downcast::<T>().is_some()
     }
 }

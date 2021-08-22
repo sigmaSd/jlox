@@ -50,6 +50,8 @@ impl Scanner {
             self.start = self.current;
             self.scan_token();
         }
+        self.tokens
+            .push(Token::new(TokenType::EOF, "".into(), self.line));
         self.tokens.clone()
     }
     fn is_at_end(&self) -> bool {

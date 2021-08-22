@@ -1,6 +1,7 @@
 use std::{
     cell::Cell,
     io::{self, stdin, Write},
+    panic,
     process::exit,
 };
 mod scanner;
@@ -8,13 +9,15 @@ use interpreter::Interpreter;
 use parser::Parser;
 use scanner::Scanner;
 
+mod environment;
 mod expr;
 mod interpreter;
 mod parser;
+mod stmt;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 fn main() -> Result<()> {
-    let lox = Lox::new();
+    let mut lox = Lox::new();
     let args: Vec<_> = std::env::args().skip(1).collect();
     match args.len() {
         0 => lox.run_prompt(),
@@ -27,30 +30,30 @@ fn main() -> Result<()> {
 }
 
 struct Lox {
-    _scanner: Option<Scanner>,
+    interpreter: Interpreter,
     had_error: Cell<bool>,
 }
 impl Lox {
     fn new() -> Self {
         Self {
-            _scanner: None,
+            interpreter: Interpreter::new(),
             had_error: Cell::new(false),
         }
     }
-    fn run_file(&self, file: &str) -> Result<()> {
+    fn run_file(&mut self, file: &str) -> Result<()> {
         let code = std::fs::read_to_string(file)?;
         self.run(&code);
         Ok(())
     }
 
-    fn run(&self, code: &str) {
+    fn run(&mut self, code: &str) {
         // scanner
         let mut scanner = Scanner::new(code.to_string());
         let tokens = scanner.scan_tokens();
 
-        for token in &tokens {
-            println!("{:?}", token);
-        }
+        //        for token in &tokens {
+        //            println!("{:?}", token);
+        //        }
 
         self.check_for_error(&scanner);
         if self.had_error.get() {
@@ -59,15 +62,17 @@ impl Lox {
 
         // parser
         let mut parser = Parser::new(tokens);
-        let expr = parser.parse();
+        let stmts = panic::catch_unwind(move || parser.parse());
+        if stmts.is_err() {
+            return;
+        }
 
         self.check_for_error(&scanner);
         if self.had_error.get() {
             exit(65);
         }
 
-        let mut interpreter = Interpreter::new();
-        interpreter.interpret(&expr);
+        self.interpreter.interpret(stmts.unwrap());
         self.check_for_error(&scanner);
         if self.had_error.get() {
             exit(70);
@@ -79,7 +84,7 @@ impl Lox {
             .set(self.had_error.get() & may_contain_error.had_error().get());
     }
 
-    fn run_prompt(&self) -> Result<()> {
+    fn run_prompt(&mut self) -> Result<()> {
         let mut line = String::new();
         loop {
             print!("> ");

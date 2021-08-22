@@ -1,53 +1,63 @@
 use crate::scanner::Token;
 
+#[macro_export]
 macro_rules! ast {
-    ($($ast_expr: ident => $($field: ident $type: ty)+,)+) => {
-                $(
+    (-$name: ident- $($ast_expr: ident => $($field: ident $type: ty)+,)+) => {
+        $(
+        #[derive(Debug)]
         pub struct $ast_expr {
             $(pub $field: $type,)+
         })+
-            pub enum Expr {
-                $(
-     $ast_expr($ast_expr),
-     )+
-            }
+        #[derive(Debug)]
+        pub enum $name {
+        $(
+             $ast_expr($ast_expr),
+         )+
+        }
     }
 }
 ast!(
+-Expr-
 Binary => left Box<Expr> operator Token  right Box<Expr>,
+Assign => name Token value Box<Expr>,
 Grouping => expression Box<Expr>,
 Literal => value Option<String>,
 Unary => operator Token right Box<Expr>,
+Variable => name Token,
 );
 
 impl Expr {
-    pub fn accept<R>(&self, visitor: &dyn Visit<R>) -> R {
+    pub fn accept<R>(&self, visitor: &mut dyn Visit<R>) -> R {
         match self {
             Expr::Binary(binary) => visitor.visit_binary_expr(binary),
             Expr::Grouping(group) => visitor.visit_grouping_expr(group),
             Expr::Literal(lit) => visitor.visit_literal_expr(lit),
             Expr::Unary(un) => visitor.visit_unary_expr(un),
+            Expr::Variable(var) => visitor.visit_variable_expr(var),
+            Expr::Assign(expr) => visitor.visit_assign_expr(expr),
         }
     }
 }
 
 pub trait Visit<R> {
-    fn visit_binary_expr(&self, expr: &Binary) -> R;
-    fn visit_grouping_expr(&self, expr: &Grouping) -> R;
-    fn visit_literal_expr(&self, expr: &Literal) -> R;
-    fn visit_unary_expr(&self, expr: &Unary) -> R;
+    fn visit_binary_expr(&mut self, expr: &Binary) -> R;
+    fn visit_grouping_expr(&mut self, expr: &Grouping) -> R;
+    fn visit_literal_expr(&mut self, expr: &Literal) -> R;
+    fn visit_unary_expr(&mut self, expr: &Unary) -> R;
+    fn visit_variable_expr(&mut self, expr: &Variable) -> R;
+    fn visit_assign_expr(&mut self, expr: &Assign) -> R;
 }
 
 pub struct AstPrinter {}
 impl Visit<String> for AstPrinter {
-    fn visit_binary_expr(&self, expr: &Binary) -> String {
+    fn visit_binary_expr(&mut self, expr: &Binary) -> String {
         self.parenthesize(&expr.operator.lexeme, [&expr.left, &expr.right])
     }
-    fn visit_grouping_expr(&self, expr: &Grouping) -> String {
+    fn visit_grouping_expr(&mut self, expr: &Grouping) -> String {
         self.parenthesize("group", [&expr.expression])
     }
 
-    fn visit_literal_expr(&self, expr: &Literal) -> String {
+    fn visit_literal_expr(&mut self, expr: &Literal) -> String {
         if let Some(ref value) = expr.value {
             value.clone()
         } else {
@@ -55,19 +65,31 @@ impl Visit<String> for AstPrinter {
         }
     }
 
-    fn visit_unary_expr(&self, expr: &Unary) -> String {
+    fn visit_unary_expr(&mut self, expr: &Unary) -> String {
         self.parenthesize(&expr.operator.lexeme, [&expr.right])
+    }
+
+    fn visit_variable_expr(&mut self, expr: &Variable) -> String {
+        expr.name.to_string()
+    }
+
+    fn visit_assign_expr(&mut self, expr: &Assign) -> String {
+        format!(
+            "name: {} value: {}",
+            expr.name.to_string(),
+            expr.value.accept(self)
+        )
     }
 }
 
 #[allow(dead_code)]
 impl AstPrinter {
-    pub fn print(&self, expr: Expr) -> String {
+    pub fn print(&mut self, expr: Expr) -> String {
         expr.accept(self)
     }
 
     fn parenthesize<'a>(
-        &self,
+        &mut self,
         name: &str,
         exprs: impl IntoIterator<Item = &'a Box<Expr>>,
     ) -> String {

@@ -94,7 +94,15 @@ impl Lox {
             if code.is_empty() {
                 break;
             }
-            self.run(code);
+            // always print in a repl
+            let repl_it = |code: &str| {
+                if !code.ends_with(';') {
+                    format!("print {};", code)
+                } else {
+                    code.to_string()
+                }
+            };
+            self.run(&repl_it(code));
             self.had_error.set(false);
             line.clear();
         }

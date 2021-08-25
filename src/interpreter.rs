@@ -1,8 +1,5 @@
-use crate::{expr, obj, scanner::TokenType, stmt, LError};
-use std::{
-    cell::{Cell, RefCell},
-    rc::Rc,
-};
+use crate::{expr, obj, scanner::TokenType, stmt};
+use std::{cell::RefCell, rc::Rc};
 
 mod environment;
 use environment::Environment;
@@ -10,7 +7,6 @@ mod object;
 use object::Object;
 
 pub struct Interpreter {
-    had_error: Cell<bool>,
     environment: Rc<RefCell<Environment>>,
 }
 impl stmt::Visit<()> for Interpreter {
@@ -173,7 +169,6 @@ fn is_truthy(right: &Object) -> bool {
 impl Interpreter {
     pub fn new() -> Self {
         Self {
-            had_error: Cell::new(false),
             environment: Rc::new(RefCell::new(Environment::new(None))),
         }
     }
@@ -207,11 +202,5 @@ fn stringify(obj: Object) -> String {
         text.trim_end_matches(".0").to_string()
     } else {
         obj.downcast::<String>()
-    }
-}
-
-impl LError for Interpreter {
-    fn had_error(&self) -> &std::cell::Cell<bool> {
-        &self.had_error
     }
 }

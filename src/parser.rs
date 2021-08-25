@@ -1,23 +1,15 @@
-use std::cell::Cell;
-
 use crate::expr::{self, Expr};
 use crate::scanner::{Token, TokenType};
 use crate::stmt::{self, Stmt};
-use crate::LError;
 
 pub struct Parser {
     tokens: Vec<Token>,
     current: usize,
-    had_error: Cell<bool>,
 }
 
 impl Parser {
     pub fn new(tokens: Vec<Token>) -> Self {
-        Self {
-            tokens,
-            current: 0,
-            had_error: Cell::new(false),
-        }
+        Self { tokens, current: 0 }
     }
     pub fn parse(&mut self) -> Vec<Stmt> {
         let mut stmts = vec![];
@@ -152,9 +144,9 @@ impl Parser {
     }
     fn parse_error(&self, token: &Token, message: &'static str) -> ! {
         if token.ttype == TokenType::EOF {
-            self.report(token.line, Some(" at end".into()), message);
+            eprintln!("{} at end {}", token.line, message);
         } else {
-            self.report(token.line, Some(format!(" at '{}'", token.lexeme)), message);
+            eprintln!("{} at '{}' {}", token.line, token.lexeme, message);
         }
         panic!("parser errored")
     }
@@ -271,17 +263,13 @@ impl Parser {
     fn assignment(&mut self) -> Box<Expr> {
         let expr = self.or();
         if self.tmatch([TokenType::EQUAL]) {
-            let equals = self.previous().clone();
+            let _equals = self.previous();
             let value = self.assignment();
 
             if let Expr::Variable(var) = *expr {
                 let name = var.name;
                 return Expr::Assign(expr::Assign { name, value }).into();
             }
-            self.error(
-                self.current,
-                &format!("Invalid assignment target {}", equals),
-            );
         }
         expr
     }
@@ -407,11 +395,5 @@ impl Parser {
         }
 
         body
-    }
-}
-
-impl LError for Parser {
-    fn had_error(&self) -> &std::cell::Cell<bool> {
-        &self.had_error
     }
 }

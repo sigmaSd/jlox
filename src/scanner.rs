@@ -1,13 +1,11 @@
-use std::{cell::Cell, collections::HashMap, fmt::Display, iter::Once};
+use std::{collections::HashMap, fmt::Display, iter::Once};
 
-use crate::LError;
 pub struct Scanner {
     source: String,
     tokens: Vec<Token>,
     start: usize,
     current: usize,
     line: usize,
-    had_error: Cell<bool>,
     keywords: HashMap<&'static str, TokenType>,
 }
 impl Scanner {
@@ -18,7 +16,6 @@ impl Scanner {
             start: 0,
             current: 0,
             line: 1,
-            had_error: Cell::new(false),
             keywords: Self::keywords(),
         }
     }
@@ -106,7 +103,7 @@ impl Scanner {
                 } else if c.is_lalpha() {
                     self.identifier();
                 } else {
-                    self.report(self.line, None, "Unexpected character.");
+                    eprintln!("{} Unexpected character.", self.line);
                 }
             }
         }
@@ -146,7 +143,7 @@ impl Scanner {
             self.advance();
         }
         if self.is_at_end() {
-            self.report(self.line, None, "Unterminated string.");
+            eprintln!("{} Unexpected string.", self.line);
             return;
         }
 
@@ -285,12 +282,6 @@ pub enum TokenType {
 impl Display for TokenType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         std::fmt::Debug::fmt(&self, f)
-    }
-}
-
-impl LError for Scanner {
-    fn had_error(&self) -> &Cell<bool> {
-        &self.had_error
     }
 }
 

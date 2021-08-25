@@ -1,6 +1,5 @@
 use std::{
     io::{self, Write},
-    panic,
     path::Path,
 };
 
@@ -16,9 +15,22 @@ use scanner::Scanner;
 
 pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
-#[derive(Default)]
 pub struct Lox {
     interpreter: Interpreter,
+}
+impl Default for Lox {
+    fn default() -> Self {
+        std::panic::set_hook(Box::new(|info| {
+            if info.payload().downcast_ref::<&str>() == Some(&"<Throw>") {
+                // Don't show any message on Throw errors
+            } else {
+                eprintln!("{}", info);
+            }
+        }));
+        Lox {
+            interpreter: Interpreter::default(),
+        }
+    }
 }
 
 impl Lox {
@@ -29,17 +41,22 @@ impl Lox {
 
         // parser
         let mut parser = Parser::new(tokens);
-        let stmts = panic::catch_unwind(move || parser.parse());
+        let stmts = std::panic::catch_unwind(move || parser.parse());
         if stmts.is_err() {
             return;
         }
         let stmts = stmts.unwrap();
 
         // interpreter
+        // Note: Catch is not very robust, because the fields of the interpreter are still shared
         let mut interpreter = self.interpreter.clone();
-        let _ = panic::catch_unwind(move || {
+        let interpret_result = std::panic::catch_unwind(move || {
             interpreter.interpret(stmts);
+            interpreter
         });
+        if let Ok(interpreter) = interpret_result {
+            self.interpreter = interpreter;
+        }
     }
 
     pub fn run_file<P: AsRef<Path>>(&mut self, file: P) -> Result<()> {

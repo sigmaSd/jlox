@@ -1,6 +1,10 @@
+use std::fmt;
+
 use crate::expr::{self, Expr};
+use crate::interpreter::Object;
 use crate::scanner::{Token, TokenType};
 use crate::stmt::{self, Stmt};
+use crate::{null_obj, obj};
 
 pub struct Parser {
     tokens: Vec<Token>,
@@ -92,27 +96,24 @@ impl Parser {
             let right = self.unary();
             return Expr::Unary(expr::Unary { operator, right }).into();
         }
-        self.primary()
+        self.call()
     }
     //primary        → NUMBER | STRING | "true" | "false" | "nil" | "(" expression ")" ;
     fn primary(&mut self) -> Box<Expr> {
         if self.tmatch([TokenType::FALSE]) {
             return Expr::Literal(expr::Literal {
-                value: Some("false".into()),
+                value: obj!(false; Object::Bool),
             })
             .into();
         }
         if self.tmatch([TokenType::TRUE]) {
             return Expr::Literal(expr::Literal {
-                value: Some("true".into()),
+                value: obj!(true; Object::Bool),
             })
             .into();
         }
         if self.tmatch([TokenType::NIL]) {
-            return Expr::Literal(expr::Literal {
-                value: Some("null".into()),
-            })
-            .into();
+            return Expr::Literal(expr::Literal { value: null_obj!() }).into();
         }
 
         if self.tmatch([TokenType::NUMBER, TokenType::STRING]) {
@@ -133,22 +134,25 @@ impl Parser {
             self.consume(TokenType::RIGHT_PAREN, "Expect ')' after expression.");
             return Expr::Grouping(expr::Grouping { expression: expr }).into();
         }
-        self.parse_error(self.peek().unwrap(), "Expected expression.");
+        self.throw_error(self.peek().unwrap(), "Expected expression.");
     }
-    fn consume(&mut self, ttype: TokenType, message: &'static str) -> &Token {
+    fn consume(&mut self, ttype: TokenType, message: impl fmt::Display) -> &Token {
         if self.check(ttype) {
             self.advance()
         } else {
-            self.parse_error(self.peek().unwrap(), message)
+            self.throw_error(self.peek().unwrap(), message)
         }
     }
-    fn parse_error(&self, token: &Token, message: &'static str) -> ! {
+    fn throw_error(&self, token: &Token, message: impl fmt::Display) -> ! {
+        self.report_error(token, message);
+        panic!("parser errored")
+    }
+    fn report_error(&self, token: &Token, message: impl fmt::Display) {
         if token.ttype == TokenType::EOF {
             eprintln!("{} at end {}", token.line, message);
         } else {
             eprintln!("{} at '{}' {}", token.line, token.lexeme, message);
         }
-        panic!("parser errored")
     }
     fn _synchronize(&mut self) {
         self.advance();
@@ -217,6 +221,9 @@ impl Parser {
         if self.tmatch([TokenType::PRINT]) {
             return self.print_statement();
         }
+        if self.tmatch([TokenType::RETURN]) {
+            return self.return_statement();
+        }
         if self.tmatch([TokenType::WHILE]) {
             return self.while_statement();
         }
@@ -241,6 +248,9 @@ impl Parser {
     }
 
     fn declaration(&mut self) -> Stmt {
+        if self.tmatch([TokenType::FUN]) {
+            return self.function("function");
+        }
         if self.tmatch([TokenType::VAR]) {
             return self.var_declaration();
         }
@@ -379,7 +389,7 @@ impl Parser {
             *condition
         } else {
             Expr::Literal(expr::Literal {
-                value: Some("true".into()),
+                value: obj!(true; Object::Bool),
             })
         };
 
@@ -395,5 +405,84 @@ impl Parser {
         }
 
         body
+    }
+
+    fn call(&mut self) -> Box<Expr> {
+        let mut expr = self.primary();
+
+        loop {
+            if self.tmatch(TokenType::LEFT_PAREN) {
+                expr = self.finish_call(expr).into();
+            } else {
+                break;
+            }
+        }
+        expr
+    }
+
+    fn finish_call(&mut self, callee: Box<Expr>) -> Expr {
+        let mut arguemnts = vec![];
+        if !self.check(TokenType::RIGHT_PAREN) {
+            arguemnts.push(*self.expression());
+            while self.tmatch(TokenType::COMMA) {
+                if arguemnts.len() >= 255 {
+                    self.report_error(self.peek().unwrap(), "Can't have more thab 255 arguemnts.");
+                }
+                arguemnts.push(*self.expression());
+            }
+        }
+        let paren = self
+            .consume(TokenType::RIGHT_PAREN, "Expect ')' after arguemnts.")
+            .clone();
+
+        Expr::Call(expr::Call {
+            callee,
+            paren,
+            arguemnts,
+        })
+    }
+
+    fn function(&mut self, kind: &str) -> Stmt {
+        let name = self
+            .consume(TokenType::IDENTIFIER, format!("Expect {} name.", kind))
+            .clone();
+        self.consume(
+            TokenType::LEFT_PAREN,
+            format!("Expect '(' after {} name.", kind),
+        );
+        let mut params = vec![];
+        if !self.check(TokenType::RIGHT_PAREN) {
+            params.push(
+                self.consume(TokenType::IDENTIFIER, "Expect parameter name.")
+                    .clone(),
+            );
+            while self.tmatch(TokenType::COMMA) {
+                if params.len() >= 255 {
+                    self.report_error(self.peek().unwrap(), "Can't have more than 255 parameters.");
+                }
+                params.push(
+                    self.consume(TokenType::IDENTIFIER, "Expect parameter name.")
+                        .clone(),
+                );
+            }
+        }
+        self.consume(TokenType::RIGHT_PAREN, "Expect ')' after parameters");
+        self.consume(
+            TokenType::LEFT_BRACE,
+            format!("Expect '{{' before {} body.", kind),
+        );
+
+        let body = self.block();
+        Stmt::Function(stmt::Function { name, params, body })
+    }
+
+    fn return_statement(&mut self) -> Stmt {
+        let keyword = self.previous().clone();
+        let mut value = None;
+        if !self.check(TokenType::SEMICOLON) {
+            value = Some(*self.expression());
+        }
+        self.consume(TokenType::SEMICOLON, "Expect ';' after return value.");
+        Stmt::Return(stmt::Return { keyword, value })
     }
 }

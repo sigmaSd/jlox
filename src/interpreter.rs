@@ -1,14 +1,21 @@
+use crate::downcast;
+use crate::interpreter::lox_callable::{Clock, LoxFunction};
 use crate::{expr, obj, scanner::TokenType, stmt};
 use std::sync::{Arc, RwLock};
 
 mod environment;
 use environment::Environment;
 mod object;
-use object::Object;
+pub use object::Object;
+mod lox_callable;
+use lox_callable::LoxCallable;
+
+static mut RETURN_VALUE: Vec<Object> = Vec::new();
 
 #[derive(Clone)]
 pub struct Interpreter {
     environment: Arc<RwLock<Environment>>,
+    globals: Arc<RwLock<Environment>>,
 }
 
 impl stmt::Visit<()> for Interpreter {
@@ -52,6 +59,24 @@ impl stmt::Visit<()> for Interpreter {
             self.execute(&stmt.body)
         }
     }
+
+    fn visit_function_stmt(&mut self, stmt: &stmt::Function) {
+        let function = LoxFunction::new(stmt.clone(), self.environment.clone());
+        self.environment.try_write().unwrap().define(
+            stmt.name.lexeme.clone(),
+            Some(obj!(function; @rr Object::Function)),
+        );
+    }
+
+    fn visit_return_stmt(&mut self, stmt: &stmt::Return) {
+        if let Some(ref value) = stmt.value {
+            unsafe {
+                RETURN_VALUE.push(self.evaluate(value));
+            }
+
+            panic!("<Throw>");
+        }
+    }
 }
 impl expr::Visit<Object> for Interpreter {
     fn visit_binary_expr(&mut self, expr: &crate::expr::Binary) -> Object {
@@ -61,42 +86,42 @@ impl expr::Visit<Object> for Interpreter {
         match expr.operator.ttype {
             TokenType::MINUS => {
                 check_number_operands(&expr.operator, [&left, &right]);
-                return obj!(left.downcast::<f64>() - right.downcast::<f64>());
+                return obj!(downcast!(left => Object::Number) - downcast!(right => Object::Number) ; Object::Number);
             }
             TokenType::PLUS => {
-                if left.is::<f64>() && right.is::<f64>() {
-                    return obj!(left.downcast::<f64>() + right.downcast::<f64>());
+                if left.is_num() && right.is_num() {
+                    return obj!(downcast!(left => Object::Number) + downcast!(right => Object::Number) ; Object::Number);
                 }
-                if left.is::<String>() && right.is::<String>() {
-                    return obj!(left.downcast::<String>() + &right.downcast::<String>());
+                if left.is_str() && right.is_str() {
+                    return obj!(downcast!(left => Object::String) + &downcast!(right => Object::String) ; Object::String);
                 }
                 panic!("+ only supports numbers and strings")
             }
             TokenType::SLASH => {
                 check_number_operands(&expr.operator, [&left, &right]);
-                return obj!(left.downcast::<f64>() / right.downcast::<f64>());
+                return obj!(downcast!(left => Object::Number) / downcast!(right => Object::Number) ; Object::Number);
             }
             TokenType::STAR => {
                 check_number_operands(&expr.operator, [&left, &right]);
-                return obj!(left.downcast::<f64>() * right.downcast::<f64>());
+                return obj!(downcast!(left => Object::Number) * downcast!(right => Object::Number) ; Object::Number);
             }
             TokenType::GREATER => {
                 check_number_operands(&expr.operator, [&right]);
-                return obj!(left.downcast::<f64>() > right.downcast::<f64>());
+                return obj!(downcast!(left => Object::Number) > downcast!(right => Object::Number) ; Object::Bool);
             }
             TokenType::GREATER_EQUAL => {
                 check_number_operands(&expr.operator, [&left, &right]);
-                return obj!(left.downcast::<f64>() >= right.downcast::<f64>());
+                return obj!(downcast!(left => Object::Number) >= downcast!(right => Object::Number) ; Object::Bool);
             }
             TokenType::LESS => {
                 check_number_operands(&expr.operator, [&left, &right]);
-                return obj!(left.downcast::<f64>() < right.downcast::<f64>());
+                return obj!(downcast!(left => Object::Number) < downcast!(right => Object::Number) ; Object::Bool);
             }
             TokenType::LESS_EQUAL => {
-                return obj!(left.downcast::<f64>() <= right.downcast::<f64>())
+                return obj!(downcast!(left => Object::Number) <= downcast!(right => Object::Number) ; Object::Bool);
             }
-            TokenType::BANG_EQUAL => return obj!(!is_equal(left, right)),
-            TokenType::EQUAL_EQUAL => return obj!(is_equal(left, right)),
+            TokenType::BANG_EQUAL => return obj!(!is_equal(left, right) ; Object::Bool),
+            TokenType::EQUAL_EQUAL => return obj!(is_equal(left, right) ; Object::Bool),
             _ => unreachable!(),
         }
     }
@@ -106,7 +131,7 @@ impl expr::Visit<Object> for Interpreter {
     }
 
     fn visit_literal_expr(&mut self, expr: &crate::expr::Literal) -> Object {
-        obj!(expr.value.as_ref().unwrap())
+        expr.value.clone()
     }
 
     fn visit_unary_expr(&mut self, expr: &crate::expr::Unary) -> Object {
@@ -114,9 +139,9 @@ impl expr::Visit<Object> for Interpreter {
         match expr.operator.ttype {
             TokenType::MINUS => {
                 check_number_operands(&expr.operator, [&right]);
-                return obj!(-right.downcast::<f64>());
+                return obj!(-downcast!(right =>Object::Number); Object::Number);
             }
-            TokenType::BANG => return obj!(!is_truthy(&right)),
+            TokenType::BANG => return obj!(!is_truthy(&right); Object::Bool),
 
             _ => unreachable!(),
         }
@@ -148,32 +173,69 @@ impl expr::Visit<Object> for Interpreter {
 
         self.evaluate(&expr.right)
     }
+
+    fn visit_call_expr(&mut self, expr: &expr::Call) -> Object {
+        let callee = self.evaluate(&expr.callee);
+
+        let mut arguemnts = vec![];
+        for arguemnt in &expr.arguemnts {
+            arguemnts.push(self.evaluate(arguemnt));
+        }
+
+        if !callee.is_fun() {
+            panic!("{} Can only call functions and classes.", expr.paren)
+        }
+
+        let function = crate::downcast!(callee =>Object::Function);
+        if arguemnts.len() != function.try_read().unwrap().arity() {
+            panic!(
+                "{} expected {} arguemnts but got {}.",
+                expr.paren,
+                function.try_read().unwrap().arity(),
+                arguemnts.len()
+            )
+        }
+
+        function.clone().try_read().unwrap().call(self, arguemnts)
+    }
 }
 
 fn check_number_operands<'a>(
     operator: &crate::scanner::Token,
     operators: impl IntoIterator<Item = &'a Object>,
 ) {
-    if operators.into_iter().all(Object::is::<f64>) {
+    if operators.into_iter().all(Object::is_num) {
         return;
     }
     panic!("{} Operand must be a number.", operator);
 }
 fn is_equal(right: Object, left: Object) -> bool {
-    right.0 == left.0
+    right == left
 }
 
 fn is_truthy(right: &Object) -> bool {
     if right.is_null() {
         return false;
     }
-    right.try_downcast::<bool>().unwrap_or(true)
+    crate::try_downcast!(right => Object::Bool)
+        .cloned()
+        .unwrap_or(true)
 }
 
 impl Default for Interpreter {
     fn default() -> Self {
+        let globals = Arc::new(RwLock::new(Environment::new(None)));
+        //FIXME
+        let environment = globals.clone();
+
+        globals
+            .try_write()
+            .unwrap()
+            .define("clock".into(), Some(obj!(Clock{}; @rr Object::Function)));
+
         Self {
-            environment: Arc::new(RwLock::new(Environment::new(None))),
+            globals,
+            environment,
         }
     }
 }
@@ -202,10 +264,10 @@ impl Interpreter {
     }
 }
 fn stringify(obj: Object) -> String {
-    if obj.is::<f64>() {
-        let text = obj.downcast::<f64>().to_string();
+    if obj.is_num() {
+        let text = downcast!(obj => Object::Number).to_string();
         text.trim_end_matches(".0").to_string()
     } else {
-        obj.downcast::<String>()
+        obj.to_string()
     }
 }

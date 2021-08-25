@@ -1,5 +1,7 @@
 use std::{collections::HashMap, fmt::Display, iter::Once};
 
+use crate::{interpreter::Object, obj};
+
 pub struct Scanner {
     source: String,
     tokens: Vec<Token>,
@@ -132,7 +134,7 @@ impl Scanner {
         }
         self.add_token_with_literal(
             TokenType::NUMBER,
-            self.source[self.start..self.current].parse().unwrap(),
+            obj!(self.source[self.start..self.current].parse().unwrap();Object::Number),
         );
     }
     fn string(&mut self) {
@@ -150,7 +152,7 @@ impl Scanner {
         assert_eq!(self.advance(), '"');
 
         let value = self.source[self.start + 1..self.current - 1].to_string();
-        self.add_token_with_literal(TokenType::STRING, value);
+        self.add_token_with_literal(TokenType::STRING, obj!(value; Object::String));
     }
     fn peek(&self) -> Option<char> {
         if self.is_at_end() {
@@ -184,7 +186,7 @@ impl Scanner {
         let text = self.source[self.start..self.current].to_string();
         self.tokens.push(Token::new(ttype, text, self.line));
     }
-    fn add_token_with_literal(&mut self, ttype: TokenType, literal: String) {
+    fn add_token_with_literal(&mut self, ttype: TokenType, literal: Object) {
         let text = self.source[self.start..self.current].to_string();
         self.tokens
             .push(Token::new_with_literal(ttype, text, self.line, literal));
@@ -195,7 +197,7 @@ impl Scanner {
 pub struct Token {
     pub ttype: TokenType,
     pub lexeme: String,
-    pub literal: Option<String>,
+    pub literal: Object,
     pub line: usize,
 }
 impl Token {
@@ -203,13 +205,13 @@ impl Token {
         ttype: TokenType,
         lexeme: String,
         line: usize,
-        literal: String,
+        literal: Object,
     ) -> Self {
         Self {
             ttype,
             lexeme,
             line,
-            literal: Some(literal),
+            literal,
         }
     }
     pub fn new(ttype: TokenType, lexeme: String, line: usize) -> Self {
@@ -217,7 +219,7 @@ impl Token {
             ttype,
             lexeme,
             line,
-            literal: None,
+            literal: Object::Null,
         }
     }
 }

@@ -1,13 +1,14 @@
 use crate::{expr, obj, scanner::TokenType, stmt};
-use std::{cell::RefCell, rc::Rc};
+use std::sync::{Arc, RwLock};
 
 mod environment;
 use environment::Environment;
 mod object;
 use object::Object;
 
+#[derive(Clone)]
 pub struct Interpreter {
-    environment: Rc<RefCell<Environment>>,
+    environment: Arc<RwLock<Environment>>,
 }
 
 impl stmt::Visit<()> for Interpreter {
@@ -26,7 +27,8 @@ impl stmt::Visit<()> for Interpreter {
             value = Some(self.evaluate(initializer));
         }
         self.environment
-            .borrow_mut()
+            .try_write()
+            .unwrap()
             .define(stmt.name.lexeme.clone(), value);
     }
 
@@ -121,13 +123,14 @@ impl expr::Visit<Object> for Interpreter {
     }
 
     fn visit_variable_expr(&mut self, expr: &expr::Variable) -> Object {
-        self.environment.borrow().get(&expr.name)
+        self.environment.try_read().unwrap().get(&expr.name)
     }
 
     fn visit_assign_expr(&mut self, expr: &expr::Assign) -> Object {
         let value = self.evaluate(&expr.value);
         self.environment
-            .borrow_mut()
+            .try_write()
+            .unwrap()
             .assign(expr.name.clone(), value.clone());
         value
     }
@@ -170,7 +173,7 @@ fn is_truthy(right: &Object) -> bool {
 impl Default for Interpreter {
     fn default() -> Self {
         Self {
-            environment: Rc::new(RefCell::new(Environment::new(None))),
+            environment: Arc::new(RwLock::new(Environment::new(None))),
         }
     }
 }
@@ -191,7 +194,7 @@ impl Interpreter {
     /// Execute a block using a new empty environment with our original environment as enclosing
     fn execute_block(&mut self, statements: &[stmt::Stmt], environment: Environment) {
         let previous = self.environment.clone();
-        self.environment = Rc::new(RefCell::new(environment));
+        self.environment = Arc::new(RwLock::new(environment));
         for statement in statements {
             self.execute(statement);
         }

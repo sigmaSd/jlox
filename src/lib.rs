@@ -33,9 +33,13 @@ impl Lox {
         if stmts.is_err() {
             return;
         }
+        let stmts = stmts.unwrap();
 
         // interpreter
-        self.interpreter.interpret(stmts.unwrap());
+        let mut interpreter = self.interpreter.clone();
+        let _ = panic::catch_unwind(move || {
+            interpreter.interpret(stmts);
+        });
     }
 
     pub fn run_file<P: AsRef<Path>>(&mut self, file: P) -> Result<()> {

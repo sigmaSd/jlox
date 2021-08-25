@@ -1,15 +1,16 @@
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use std::collections::HashMap;
+use std::sync::{Arc, RwLock};
 
 use crate::{interpreter::Object, scanner::Token};
 
 #[derive(Debug)]
 pub struct Environment {
     values: HashMap<String, Option<Object>>,
-    enclosing: Option<Rc<RefCell<Environment>>>,
+    enclosing: Option<Arc<RwLock<Environment>>>,
 }
 
 impl Environment {
-    pub fn new(enclosing: Option<Rc<RefCell<Environment>>>) -> Self {
+    pub fn new(enclosing: Option<Arc<RwLock<Environment>>>) -> Self {
         Self {
             values: HashMap::new(),
             enclosing,
@@ -23,7 +24,11 @@ impl Environment {
             return obj.clone();
         }
         // search the enclosing env
-        if let Some(obj) = self.enclosing.as_ref().map(|enc| enc.borrow().get(token)) {
+        if let Some(obj) = self
+            .enclosing
+            .as_ref()
+            .map(|enc| enc.try_read().unwrap().get(token))
+        {
             return obj;
         }
 
@@ -38,7 +43,7 @@ impl Environment {
         }
         // search the enclosing env
         if let Some(enclosing) = self.enclosing.as_mut() {
-            enclosing.borrow_mut().assign(name, value);
+            enclosing.try_write().unwrap().assign(name, value);
             return;
         }
         panic!("Undefined variable: '{}'", name.lexeme)

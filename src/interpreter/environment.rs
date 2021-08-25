@@ -46,6 +46,6 @@ impl Environment {
             enclosing.try_write().unwrap().assign(name, value);
             return;
         }
-        panic!("Undefined variable: '{}'", name.lexeme)
+        eprintln!("Undefined variable: '{}'", name.lexeme)
     }
 }

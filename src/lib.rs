@@ -77,7 +77,7 @@ impl Lox {
             }
             // always print in a repl
             let repl_it = |code: &str| {
-                if !code.ends_with(';') {
+                if !code.starts_with("fun ") && !code.ends_with(';') {
                     format!("print {};", code)
                 } else {
                     code.to_string()

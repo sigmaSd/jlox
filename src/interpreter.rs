@@ -1,16 +1,13 @@
+use crate::{expr, obj, scanner::TokenType, stmt, LError};
 use std::{
     cell::{Cell, RefCell},
     rc::Rc,
-    str::FromStr,
 };
 
-use crate::{environment::Environment, expr, scanner::TokenType, stmt, LError};
-
-macro_rules! obj {
-    ($e: expr) => {
-        (Object($e.to_string()))
-    };
-}
+mod environment;
+use environment::Environment;
+mod object;
+use object::Object;
 
 pub struct Interpreter {
     had_error: Cell<bool>,
@@ -180,20 +177,6 @@ fn stringify(obj: Object) -> String {
         text.trim_end_matches(".0").to_string()
     } else {
         obj.downcast::<String>()
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct Object(pub String);
-impl Object {
-    pub fn downcast<T: FromStr>(&self) -> T {
-        self.try_downcast().unwrap()
-    }
-    pub fn try_downcast<T: FromStr>(&self) -> Option<T> {
-        self.0.parse().ok()
-    }
-    pub fn is<T: FromStr>(&self) -> bool {
-        self.try_downcast::<T>().is_some()
     }
 }
 

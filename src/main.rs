@@ -9,7 +9,7 @@ use interpreter::Interpreter;
 use parser::Parser;
 use scanner::Scanner;
 
-mod environment;
+mod ast;
 mod expr;
 mod interpreter;
 mod parser;

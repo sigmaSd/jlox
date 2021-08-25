@@ -19,4 +19,7 @@ impl Object {
     pub fn is<T: FromStr>(&self) -> bool {
         self.try_downcast::<T>().is_some()
     }
+    pub fn is_null(&self) -> bool {
+        self.0 == "null"
+    }
 }

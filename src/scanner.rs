@@ -1,4 +1,4 @@
-use std::{cell::Cell, collections::HashMap, fmt::Display};
+use std::{cell::Cell, collections::HashMap, fmt::Display, iter::Once};
 
 use crate::LError;
 pub struct Scanner {
@@ -319,5 +319,15 @@ impl Helper for Option<char> {
     }
     fn is_lalpha_numeric(&self) -> bool {
         self.map(|this| this.is_lalpha_numeric()).unwrap_or(false)
+    }
+}
+
+impl IntoIterator for TokenType {
+    type Item = TokenType;
+
+    type IntoIter = Once<TokenType>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        std::iter::once(self)
     }
 }

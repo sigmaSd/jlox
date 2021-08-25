@@ -5,7 +5,9 @@ use crate::scanner::Token;
 ast!(
 -Stmt-
 Block => visit_block_stmt => statements Vec<Stmt>,
-Expression => visit_expression_stmt => expression Box<Expr>,
-Print => visit_print_stmt => expression Box<Expr>,
-Var => visit_var_stmt => name Token initializer Option<Box<Expr>>,
+Expression => visit_expression_stmt => expression Expr,
+If => visit_if_stmt => condition Expr then_branch Box<Stmt> else_branch Option<Box<Stmt>>,
+Print => visit_print_stmt => expression Expr,
+Var => visit_var_stmt => name Token initializer Option<Expr>,
+While => visit_while_stmt => condition Expr body Box<Stmt>,
 );

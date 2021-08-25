@@ -216,8 +216,17 @@ impl Parser {
     }
 
     fn statement(&mut self) -> Stmt {
+        if self.tmatch([TokenType::FOR]) {
+            return self.for_statement();
+        }
+        if self.tmatch([TokenType::IF]) {
+            return self.if_statement();
+        }
         if self.tmatch([TokenType::PRINT]) {
             return self.print_statement();
+        }
+        if self.tmatch([TokenType::WHILE]) {
+            return self.while_statement();
         }
         if self.tmatch([TokenType::LEFT_BRACE]) {
             return Stmt::Block(stmt::Block {
@@ -228,13 +237,13 @@ impl Parser {
     }
 
     fn print_statement(&mut self) -> Stmt {
-        let value = self.expression();
+        let value = *self.expression();
         self.consume(TokenType::SEMICOLON, "expect ';' after value.");
         Stmt::Print(stmt::Print { expression: value })
     }
 
     fn expression_statement(&mut self) -> Stmt {
-        let expr = self.expression();
+        let expr = *self.expression();
         self.consume(TokenType::SEMICOLON, "expect ';' after expression.");
         Stmt::Expression(stmt::Expression { expression: expr })
     }
@@ -253,14 +262,14 @@ impl Parser {
 
         let mut initializer = None;
         if self.tmatch([TokenType::EQUAL]) {
-            initializer = Some(self.expression());
+            initializer = Some(*self.expression());
         }
         self.consume(TokenType::SEMICOLON, "Expect ; after variable declaration.");
         Stmt::Var(stmt::Var { name, initializer })
     }
 
     fn assignment(&mut self) -> Box<Expr> {
-        let expr = self.equality();
+        let expr = self.or();
         if self.tmatch([TokenType::EQUAL]) {
             let equals = self.previous().clone();
             let value = self.assignment();
@@ -284,6 +293,120 @@ impl Parser {
         }
         self.consume(TokenType::RIGHT_BRACE, "Expect '}' after block.");
         statements
+    }
+
+    fn if_statement(&mut self) -> Stmt {
+        self.consume(TokenType::LEFT_PAREN, "Expect '(' after 'if'.");
+        let condition = *self.expression();
+        self.consume(TokenType::RIGHT_PAREN, "Expect ')' after if condition.");
+
+        let then_branch = self.statement().into();
+        let mut else_branch = None;
+        if self.tmatch([TokenType::ELSE]) {
+            else_branch = Some(self.statement().into());
+        }
+        Stmt::If(stmt::If {
+            condition,
+            then_branch,
+            else_branch,
+        })
+    }
+
+    fn or(&mut self) -> Box<Expr> {
+        let mut expr = self.and();
+        while self.tmatch([TokenType::OR]) {
+            let operator = self.previous().clone();
+            let right = self.and();
+            expr = Expr::Logical(expr::Logical {
+                left: expr,
+                operator,
+                right,
+            })
+            .into();
+        }
+        expr
+    }
+
+    fn and(&mut self) -> Box<Expr> {
+        let mut expr = self.equality();
+        while self.tmatch([TokenType::AND]) {
+            let operator = self.previous().clone();
+            let right = self.equality();
+            expr = Expr::Logical(expr::Logical {
+                left: expr,
+                operator,
+                right,
+            })
+            .into();
+        }
+        expr
+    }
+
+    fn while_statement(&mut self) -> Stmt {
+        self.consume(TokenType::LEFT_PAREN, "Expect '(' after 'while'");
+        let condition = *self.expression();
+        self.consume(TokenType::RIGHT_PAREN, "Expect ')' after condition");
+        let body = self.statement().into();
+
+        Stmt::While(stmt::While { condition, body })
+    }
+
+    fn for_statement(&mut self) -> Stmt {
+        self.consume(TokenType::LEFT_PAREN, "Expect '(' after 'for'");
+        let initializer = if self.tmatch(TokenType::SEMICOLON) {
+            None
+        } else if self.tmatch(TokenType::VAR) {
+            Some(self.var_declaration())
+        } else {
+            Some(self.expression_statement())
+        };
+
+        let condition = if !self.tmatch(TokenType::SEMICOLON) {
+            Some(self.expression())
+        } else {
+            None
+        };
+        self.consume(TokenType::SEMICOLON, "Expect ';' after loop condition.");
+
+        let increment = if !self.tmatch(TokenType::RIGHT_PAREN) {
+            Some(self.expression())
+        } else {
+            None
+        };
+        self.consume(TokenType::RIGHT_PAREN, "Expect ')' after clauses.");
+
+        let mut body = self.statement();
+
+        if let Some(increment) = increment {
+            body = Stmt::Block(stmt::Block {
+                statements: vec![
+                    body,
+                    Stmt::Expression(stmt::Expression {
+                        expression: *increment,
+                    }),
+                ],
+            });
+        }
+        let condition = if let Some(condition) = condition {
+            *condition
+        } else {
+            Expr::Literal(expr::Literal {
+                value: Some("true".into()),
+            })
+        };
+
+        body = Stmt::While(stmt::While {
+            condition,
+            body: body.into(),
+        });
+
+        if let Some(initializer) = initializer {
+            body = Stmt::Block(stmt::Block {
+                statements: vec![initializer, body],
+            });
+        }
+
+        body
     }
 }
 

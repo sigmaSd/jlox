@@ -39,6 +39,20 @@ impl stmt::Visit<()> for Interpreter {
             Environment::new(Some(self.environment.clone())),
         );
     }
+
+    fn visit_if_stmt(&mut self, stmt: &stmt::If) {
+        if is_truthy(&self.evaluate(&stmt.condition)) {
+            self.execute(&stmt.then_branch)
+        } else if let Some(ref else_stmt) = stmt.else_branch {
+            self.execute(else_stmt)
+        }
+    }
+
+    fn visit_while_stmt(&mut self, stmt: &stmt::While) {
+        while is_truthy(&self.evaluate(&stmt.condition)) {
+            self.execute(&stmt.body)
+        }
+    }
 }
 impl expr::Visit<Object> for Interpreter {
     fn visit_binary_expr(&mut self, expr: &crate::expr::Binary) -> Object {
@@ -103,7 +117,7 @@ impl expr::Visit<Object> for Interpreter {
                 check_number_operands(&expr.operator, [&right]);
                 return obj!(-right.downcast::<f64>());
             }
-            TokenType::BANG => return obj!(!is_truthy(right)),
+            TokenType::BANG => return obj!(!is_truthy(&right)),
 
             _ => unreachable!(),
         }
@@ -120,6 +134,20 @@ impl expr::Visit<Object> for Interpreter {
             .assign(expr.name.clone(), value.clone());
         value
     }
+
+    fn visit_logical_expr(&mut self, expr: &expr::Logical) -> Object {
+        let left = self.evaluate(&expr.left);
+
+        if expr.operator.ttype == TokenType::OR {
+            if is_truthy(&left) {
+                return left;
+            }
+        } else if !is_truthy(&left) {
+            return left;
+        }
+
+        self.evaluate(&expr.right)
+    }
 }
 
 fn check_number_operands<'a>(
@@ -135,8 +163,10 @@ fn is_equal(right: Object, left: Object) -> bool {
     right.0 == left.0
 }
 
-fn is_truthy(right: Object) -> bool {
-    //TODO if right == null
+fn is_truthy(right: &Object) -> bool {
+    if right.is_null() {
+        return false;
+    }
     right.try_downcast::<bool>().unwrap_or(true)
 }
 

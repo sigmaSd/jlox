@@ -1,16 +1,7 @@
-mod ast;
-mod expr;
-mod interpreter;
-mod lox;
-mod parser;
-mod scanner;
-mod stmt;
-use lox::Lox;
-
-pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+use lox::{Lox, Result};
 
 fn main() -> Result<()> {
-    let mut lox = Lox::new();
+    let mut lox = Lox::default();
     let args: Vec<_> = std::env::args().skip(1).collect();
     match args.len() {
         0 => lox.run_prompt(),

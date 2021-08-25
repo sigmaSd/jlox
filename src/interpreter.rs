@@ -9,6 +9,7 @@ use object::Object;
 pub struct Interpreter {
     environment: Rc<RefCell<Environment>>,
 }
+
 impl stmt::Visit<()> for Interpreter {
     fn visit_expression_stmt(&mut self, stmt: &stmt::Expression) {
         self.evaluate(&stmt.expression);
@@ -166,13 +167,14 @@ fn is_truthy(right: &Object) -> bool {
     right.try_downcast::<bool>().unwrap_or(true)
 }
 
-impl Interpreter {
-    pub fn new() -> Self {
+impl Default for Interpreter {
+    fn default() -> Self {
         Self {
             environment: Rc::new(RefCell::new(Environment::new(None))),
         }
     }
-
+}
+impl Interpreter {
     fn evaluate(&mut self, expression: &crate::expr::Expr) -> Object {
         expression.accept(self)
     }

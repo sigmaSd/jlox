@@ -1,33 +1,31 @@
 use std::{
     io::{self, Write},
     panic,
+    path::Path,
 };
 
-use crate::{interpreter::Interpreter, parser::Parser, scanner::Scanner, Result};
+mod ast;
+mod expr;
+mod interpreter;
+mod parser;
+mod scanner;
+mod stmt;
+use interpreter::Interpreter;
+use parser::Parser;
+use scanner::Scanner;
 
+pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+
+#[derive(Default)]
 pub struct Lox {
     interpreter: Interpreter,
 }
-impl Lox {
-    pub fn new() -> Self {
-        Self {
-            interpreter: Interpreter::new(),
-        }
-    }
-    pub fn run_file(&mut self, file: &str) -> Result<()> {
-        let code = std::fs::read_to_string(file)?;
-        self.run(&code);
-        Ok(())
-    }
 
+impl Lox {
     pub fn run(&mut self, code: &str) {
         // scanner
         let mut scanner = Scanner::new(code.to_string());
         let tokens = scanner.scan_tokens();
-
-        //        for token in &tokens {
-        //            println!("{:?}", token);
-        //        }
 
         // parser
         let mut parser = Parser::new(tokens);
@@ -36,8 +34,14 @@ impl Lox {
             return;
         }
 
+        // interpreter
         self.interpreter.interpret(stmts.unwrap());
-        //println!("{}", AstPrinter {}.print(*expr))
+    }
+
+    pub fn run_file<P: AsRef<Path>>(&mut self, file: P) -> Result<()> {
+        let code = std::fs::read_to_string(file)?;
+        self.run(&code);
+        Ok(())
     }
 
     pub fn run_prompt(&mut self) -> Result<()> {

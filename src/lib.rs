@@ -15,22 +15,9 @@ use scanner::Scanner;
 
 pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
+#[derive(Default)]
 pub struct Lox {
     interpreter: Interpreter,
-}
-impl Default for Lox {
-    fn default() -> Self {
-        std::panic::set_hook(Box::new(|info| {
-            if info.payload().downcast_ref::<&str>() == Some(&"<Throw>") {
-                // Don't show any message on Throw errors
-            } else {
-                eprintln!("{}", info);
-            }
-        }));
-        Lox {
-            interpreter: Interpreter::default(),
-        }
-    }
 }
 
 impl Lox {

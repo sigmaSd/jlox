@@ -10,7 +10,7 @@ pub use object::Object;
 mod lox_callable;
 use lox_callable::LoxCallable;
 
-static mut RETURN_VALUE: Vec<Object> = Vec::new();
+use trycatch::{throw, Exception};
 
 #[derive(Clone)]
 pub struct Interpreter {
@@ -70,14 +70,18 @@ impl stmt::Visit<()> for Interpreter {
 
     fn visit_return_stmt(&mut self, stmt: &stmt::Return) {
         if let Some(ref value) = stmt.value {
-            unsafe {
-                RETURN_VALUE.push(self.evaluate(value));
-            }
-
-            panic!("<Throw>");
+            throw(ReturnException(self.evaluate(value)));
         }
     }
 }
+#[derive(Debug)]
+pub struct ReturnException(Object);
+impl Exception<Object> for ReturnException {
+    fn payload(&self) -> Object {
+        self.0.clone()
+    }
+}
+
 impl expr::Visit<Object> for Interpreter {
     fn visit_binary_expr(&mut self, expr: &crate::expr::Binary) -> Object {
         let right = self.evaluate(&expr.right);

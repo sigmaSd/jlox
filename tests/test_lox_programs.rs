@@ -19,10 +19,11 @@ macro_rules! test_lox_programs  {
     }
 }
 
-test_lox_programs!(hello env fib fun hidden_var fact);
+test_lox_programs!(hello env fib fun hidden_var fact closure_scope);
 
 #[test]
 fn test_lox_programs() -> Result<()> {
+    assert_test_eq!("closure_scope" => "global\nglobal\n");
     assert_test_eq!("fact" => "2432902008176640000\n");
     assert_test_eq!("hidden_var" => "1\n2\n");
     assert_test_eq!("fun" => "Hi, Dear Reader!\n");

@@ -2,11 +2,11 @@
 macro_rules! ast {
     (-$name: ident- $($ast_expr: ident => $visit: ident => $($field: ident $type: ty)+,)+) => {
         $(
-        #[derive(Debug, Clone)]
+        #[derive(Debug, Clone, PartialEq, Eq,Hash)]
         pub struct $ast_expr {
             $(pub $field: $type,)+
         })+
-        #[derive(Debug, Clone)]
+        #[derive(Debug, Clone, PartialEq, Eq,Hash)]
         pub enum $name {
         $(
              $ast_expr($ast_expr),

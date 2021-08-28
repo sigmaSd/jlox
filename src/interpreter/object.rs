@@ -21,10 +21,19 @@ impl Default for Object {
 impl PartialEq for Object {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
+            (Self::Number(n1), Self::Number(n2)) if n1 == n2 => true,
+            (Self::String(s1), Self::String(s2)) if s1 == s2 => true,
+            (Self::Bool(b1), Self::Bool(b2)) if b1 == b2 => true,
+            (Self::Null, Self::Null) => true,
             (Self::Function(l0), Self::Function(r0)) => Arc::ptr_eq(l0, r0),
-            (Self::Function(_), _) | (_, &Self::Function(_)) => false,
-            (l, r) => PartialEq::eq(l, r),
+            _ => false,
         }
+    }
+}
+impl Eq for Object {}
+impl std::hash::Hash for Object {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        core::mem::discriminant(self).hash(state);
     }
 }
 impl fmt::Debug for Object {

@@ -7,10 +7,12 @@ mod ast;
 mod expr;
 mod interpreter;
 mod parser;
+mod resolver;
 mod scanner;
 mod stmt;
 use interpreter::Interpreter;
 use parser::Parser;
+use resolver::Resolver;
 use scanner::Scanner;
 
 pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
@@ -33,6 +35,9 @@ impl Lox {
             return;
         }
         let stmts = stmts.unwrap();
+
+        let mut resolver = Resolver::new(&mut self.interpreter);
+        resolver.resolve_stmts(&stmts);
 
         // interpreter
         // Note: Catch is not very robust, because the fields of the interpreter are still shared

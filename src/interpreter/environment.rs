@@ -3,7 +3,7 @@ use std::sync::{Arc, RwLock};
 
 use crate::{interpreter::Object, scanner::Token};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Environment {
     values: HashMap<String, Option<Object>>,
     enclosing: Option<Arc<RwLock<Environment>>>,
@@ -34,6 +34,18 @@ impl Environment {
 
         panic!("Undefined variable '{}'.", token.lexeme)
     }
+    pub fn get_at(&self, distance: &usize, name: &str) -> Object {
+        self.ancestor(distance)
+            .try_read()
+            .unwrap()
+            .values
+            .get(name)
+            .as_ref()
+            .unwrap()
+            .as_ref()
+            .unwrap()
+            .clone()
+    }
     pub fn assign(&mut self, name: Token, value: Object) {
         if let std::collections::hash_map::Entry::Occupied(mut e) =
             self.values.entry(name.lexeme.clone())
@@ -47,5 +59,27 @@ impl Environment {
             return;
         }
         eprintln!("Undefined variable: '{}'", name.lexeme)
+    }
+
+    fn ancestor(&self, distance: &usize) -> Arc<RwLock<Environment>> {
+        let mut environment = Arc::new(RwLock::new(self.clone()));
+        for _ in 0..*distance {
+            environment = environment
+                .clone()
+                .try_read()
+                .unwrap()
+                .enclosing
+                .as_ref()
+                .unwrap()
+                .clone();
+        }
+        environment
+    }
+    pub fn assign_at(&mut self, distance: &usize, name: Token, value: Object) {
+        self.ancestor(distance)
+            .try_write()
+            .unwrap()
+            .values
+            .insert(name.lexeme, Some(value));
     }
 }

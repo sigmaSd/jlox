@@ -1,6 +1,7 @@
 use crate::downcast;
 use crate::interpreter::lox_callable::{Clock, LoxFunction};
 use crate::{expr, obj, scanner::TokenType, stmt};
+use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
 mod environment;
@@ -16,6 +17,7 @@ use trycatch::{throw, Exception};
 pub struct Interpreter {
     environment: Arc<RwLock<Environment>>,
     globals: Arc<RwLock<Environment>>,
+    locals: HashMap<expr::Expr, usize>,
 }
 
 impl stmt::Visit<()> for Interpreter {
@@ -148,15 +150,24 @@ impl expr::Visit<Object> for Interpreter {
     }
 
     fn visit_variable_expr(&mut self, expr: &expr::Variable) -> Object {
-        self.environment.try_read().unwrap().get(&expr.name)
+        self.lookup_variable(&expr.name, expr)
     }
 
     fn visit_assign_expr(&mut self, expr: &expr::Assign) -> Object {
         let value = self.evaluate(&expr.value);
-        self.environment
-            .try_write()
-            .unwrap()
-            .assign(expr.name.clone(), value.clone());
+        let distance = self.locals.get(&expr::Expr::Assign(expr.clone()));
+        if let Some(distance) = distance {
+            self.environment.try_write().unwrap().assign_at(
+                distance,
+                expr.name.clone(),
+                value.clone(),
+            );
+        } else {
+            self.globals
+                .try_write()
+                .unwrap()
+                .assign(expr.name.clone(), value.clone());
+        }
         value
     }
 
@@ -236,6 +247,7 @@ impl Default for Interpreter {
         Self {
             globals,
             environment,
+            locals: HashMap::new(),
         }
     }
 }
@@ -253,6 +265,10 @@ impl Interpreter {
         stmt.accept(self);
     }
 
+    pub(crate) fn resolve(&mut self, expr: &expr::Expr, depth: usize) {
+        self.locals.insert(expr.clone(), depth);
+    }
+
     /// Execute a block using a new empty environment with our original environment as enclosing
     fn execute_block(&mut self, statements: &[stmt::Stmt], environment: Environment) {
         let previous = self.environment.clone();
@@ -261,6 +277,17 @@ impl Interpreter {
             self.execute(statement);
         }
         self.environment = previous;
+    }
+
+    fn lookup_variable(&mut self, name: &crate::scanner::Token, expr: &expr::Variable) -> Object {
+        if let Some(distance) = self.locals.get(&expr::Expr::Variable(expr.clone())) {
+            self.environment
+                .try_read()
+                .unwrap()
+                .get_at(distance, &name.lexeme)
+        } else {
+            self.globals.try_read().unwrap().get(name)
+        }
     }
 }
 fn stringify(obj: Object) -> String {

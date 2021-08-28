@@ -3,12 +3,11 @@ use std::{
     time::SystemTime,
 };
 
-use trycatch::{catch, CatchError, Exception};
+use trycatch::{catch, CatchError, ExceptionDowncast};
 
-use super::ReturnException;
 use crate::{null_obj, obj, stmt};
 
-use super::{environment::Environment, Interpreter, Object};
+use super::{environment::Environment, Interpreter, Object, ReturnException};
 
 pub trait LoxCallable: Send + Sync {
     fn arity(&self) -> usize;
@@ -43,12 +42,11 @@ impl LoxCallable for LoxFunction {
         let body = &self.declaration.body;
         let mut interpreter = interpreter.clone();
 
-        let execution_result =
-            catch!(interpreter.execute_block(body, environment) => ReturnException);
+        let execution_result = catch(move || interpreter.execute_block(body, environment));
 
         if let Err(e) = execution_result {
             match e {
-                CatchError::Exception(e) => e.payload(),
+                CatchError::Exception(e) => e.downcast::<ReturnException>().0,
                 CatchError::Panic(p) => std::panic::panic_any(p),
             }
         } else {

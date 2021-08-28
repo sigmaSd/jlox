@@ -74,13 +74,9 @@ impl stmt::Visit<()> for Interpreter {
         }
     }
 }
-#[derive(Debug)]
+
+#[derive(Debug, Exception)]
 pub struct ReturnException(Object);
-impl Exception<Object> for ReturnException {
-    fn payload(&self) -> Object {
-        self.0.clone()
-    }
-}
 
 impl expr::Visit<Object> for Interpreter {
     fn visit_binary_expr(&mut self, expr: &crate::expr::Binary) -> Object {

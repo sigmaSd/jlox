@@ -12,3 +12,10 @@ dependencies = [
 [[package]]
 name = "trycatch"
 version = "0.1.0"
+dependencies = [
+ "trycatch-derive",
+]
+
+[[package]]
+name = "trycatch-derive"
+version = "0.1.0"

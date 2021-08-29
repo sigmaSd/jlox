@@ -122,6 +122,12 @@ impl Parser {
             })
             .into();
         }
+        if self.tmatch([TokenType::THIS]) {
+            return Expr::This(expr::This {
+                keyword: self.previous().clone(),
+            })
+            .into();
+        }
         if self.tmatch([TokenType::IDENTIFIER]) {
             return Expr::Variable(expr::Variable {
                 name: self.previous().clone(),
@@ -248,8 +254,11 @@ impl Parser {
     }
 
     fn declaration(&mut self) -> Stmt {
+        if self.tmatch([TokenType::CLASS]) {
+            return self.class_declaration();
+        }
         if self.tmatch([TokenType::FUN]) {
-            return self.function("function");
+            return Stmt::Function(self.function("function"));
         }
         if self.tmatch([TokenType::VAR]) {
             return self.var_declaration();
@@ -276,9 +285,20 @@ impl Parser {
             let _equals = self.previous();
             let value = self.assignment();
 
-            if let Expr::Variable(var) = *expr {
-                let name = var.name;
-                return Expr::Assign(expr::Assign { name, value }).into();
+            match *expr {
+                Expr::Variable(var) => {
+                    let name = var.name;
+                    return Expr::Assign(expr::Assign { name, value }).into();
+                }
+                Expr::Get(get) => {
+                    return Expr::Set(expr::Set {
+                        object: get.object,
+                        name: get.name,
+                        value,
+                    })
+                    .into();
+                }
+                _ => unreachable!(),
             }
         }
         expr
@@ -413,6 +433,11 @@ impl Parser {
         loop {
             if self.tmatch(TokenType::LEFT_PAREN) {
                 expr = self.finish_call(expr).into();
+            } else if self.tmatch(TokenType::DOT) {
+                let name = self
+                    .consume(TokenType::IDENTIFIER, "Expect property name after.")
+                    .clone();
+                expr = Expr::Get(expr::Get { object: expr, name }).into();
             } else {
                 break;
             }
@@ -442,7 +467,7 @@ impl Parser {
         })
     }
 
-    fn function(&mut self, kind: &str) -> Stmt {
+    fn function(&mut self, kind: &str) -> stmt::Function {
         let name = self
             .consume(TokenType::IDENTIFIER, format!("Expect {} name.", kind))
             .clone();
@@ -473,7 +498,7 @@ impl Parser {
         );
 
         let body = self.block();
-        Stmt::Function(stmt::Function { name, params, body })
+        stmt::Function { name, params, body }
     }
 
     fn return_statement(&mut self) -> Stmt {
@@ -484,5 +509,19 @@ impl Parser {
         }
         self.consume(TokenType::SEMICOLON, "Expect ';' after return value.");
         Stmt::Return(stmt::Return { keyword, value })
+    }
+
+    fn class_declaration(&mut self) -> Stmt {
+        let name = self
+            .consume(TokenType::IDENTIFIER, "Expect class name")
+            .clone();
+        self.consume(TokenType::LEFT_BRACE, "Expect '{' before class body.");
+
+        let mut methods = vec![];
+        while !self.check(TokenType::RIGHT_BRACE) && !self.is_at_end() {
+            methods.push(self.function("method"));
+        }
+        self.consume(TokenType::RIGHT_BRACE, "Expect '}' after class body.");
+        Stmt::Class(stmt::Class { name, methods })
     }
 }

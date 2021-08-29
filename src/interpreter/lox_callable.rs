@@ -7,23 +7,41 @@ use trycatch::{catch, CatchError, ExceptionDowncast};
 
 use crate::{null_obj, obj, stmt};
 
-use super::{environment::Environment, Interpreter, Object, ReturnException};
+use super::{
+    environment::Environment, object::class::LoxInstance, Interpreter, Object, ReturnException,
+};
 
 pub trait LoxCallable: Send + Sync {
     fn arity(&self) -> usize;
     fn call(&self, _interpreter: &mut Interpreter, _arguemnts: Vec<Object>) -> Object;
 }
 
+#[derive(Debug, Clone)]
 pub struct LoxFunction {
     declaration: stmt::Function,
     closure: Arc<RwLock<Environment>>,
+    is_initializer: bool,
 }
 
 impl LoxFunction {
-    pub fn new(declaration: stmt::Function, closure: Arc<RwLock<Environment>>) -> Self {
+    pub fn new(
+        declaration: stmt::Function,
+        closure: Arc<RwLock<Environment>>,
+        is_initializer: bool,
+    ) -> Self {
         Self {
             declaration,
             closure,
+            is_initializer,
+        }
+    }
+    pub fn bind(&self, instance: LoxInstance) -> LoxFunction {
+        let mut environment = Environment::new(Some(self.closure.clone()));
+        environment.define("this".into(), Some(Object::Instance(instance)));
+        LoxFunction {
+            declaration: self.declaration.clone(),
+            closure: Arc::new(RwLock::new(environment)),
+            is_initializer: self.is_initializer,
         }
     }
 }
@@ -45,15 +63,24 @@ impl LoxCallable for LoxFunction {
         let execution_result = catch(move || interpreter.execute_block(body, environment));
 
         if let Err(e) = execution_result {
-            match e {
-                CatchError::Exception(e) => e.downcast::<ReturnException>().0,
+            return match e {
+                CatchError::Exception(e) => {
+                    if self.is_initializer {
+                        self.closure.try_read().unwrap().get_at(&0, "this")
+                    } else {
+                        e.downcast::<ReturnException>().0
+                    }
+                }
                 CatchError::Panic(p) => std::panic::panic_any(p),
-            }
-        } else {
-            null_obj!()
+            };
         }
+        if self.is_initializer {
+            return self.closure.try_read().unwrap().get_at(&0, "this");
+        }
+        null_obj!()
     }
 }
+
 impl ToString for LoxFunction {
     fn to_string(&self) -> String {
         format!("<fn {}>", self.declaration.name.lexeme)

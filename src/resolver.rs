@@ -7,12 +7,21 @@ pub struct Resolver<'a> {
     interpreter: &'a mut Interpreter,
     scopes: Vec<HashMap<String, bool>>,
     current_function: FunctionType,
+    current_class: ClassType,
 }
 
 #[derive(Clone, Copy)]
 enum FunctionType {
     None,
     Function,
+    Method,
+    Initializer,
+}
+
+#[derive(Clone, Copy)]
+enum ClassType {
+    None,
+    Class,
 }
 
 impl stmt::Visit<()> for Resolver<'_> {
@@ -57,6 +66,9 @@ impl stmt::Visit<()> for Resolver<'_> {
             panic!("{} can't return from top-level code.", stmt.keyword)
         }
         if let Some(ref value) = stmt.value {
+            if matches!(self.current_function, FunctionType::Initializer) {
+                panic!("Can't return a value from an initializer.");
+            }
             self.resolve_expr(value);
         }
     }
@@ -64,6 +76,30 @@ impl stmt::Visit<()> for Resolver<'_> {
     fn visit_while_stmt(&mut self, stmt: &stmt::While) {
         self.resolve_expr(&stmt.condition);
         self.resolve_stmt(&stmt.body);
+    }
+
+    fn visit_class_stmt(&mut self, stmt: &stmt::Class) {
+        let enclosing_class = self.current_class;
+        self.current_class = ClassType::Class;
+
+        self.define(&stmt.name);
+
+        self.begin_scope();
+        self.scopes
+            .last_mut()
+            .unwrap()
+            .insert("this".to_string(), true);
+
+        for method in &stmt.methods {
+            let declaration = if method.name.lexeme == "init" {
+                FunctionType::Initializer
+            } else {
+                FunctionType::Method
+            };
+            self.resolve_function(method, declaration);
+        }
+        self.end_scope();
+        self.current_class = enclosing_class;
     }
 }
 
@@ -116,6 +152,22 @@ impl expr::Visit<()> for Resolver<'_> {
         }
         self.resolve_local(&expr::Expr::Variable(expr.clone()), &expr.name);
     }
+
+    fn visit_get_expr(&mut self, expr: &expr::Get) {
+        self.resolve_expr(&expr.object);
+    }
+
+    fn visit_set_expr(&mut self, expr: &expr::Set) {
+        self.resolve_expr(&expr.value);
+        self.resolve_expr(&expr.object);
+    }
+
+    fn visit_this_expr(&mut self, expr: &expr::This) {
+        if matches!(self.current_class, ClassType::None) {
+            panic!("Can't use 'this' outside of a class.")
+        }
+        self.resolve_local(&expr::Expr::This(expr.clone()), &expr.keyword);
+    }
 }
 
 impl<'a> Resolver<'a> {
@@ -124,6 +176,7 @@ impl<'a> Resolver<'a> {
             interpreter,
             scopes: vec![],
             current_function: FunctionType::None,
+            current_class: ClassType::None,
         }
     }
 

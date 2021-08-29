@@ -13,6 +13,8 @@ use lox_callable::LoxCallable;
 
 use trycatch::{throw, Exception};
 
+use self::object::class::LoxClass;
+
 #[derive(Clone)]
 pub struct Interpreter {
     environment: Arc<RwLock<Environment>>,
@@ -63,7 +65,7 @@ impl stmt::Visit<()> for Interpreter {
     }
 
     fn visit_function_stmt(&mut self, stmt: &stmt::Function) {
-        let function = LoxFunction::new(stmt.clone(), self.environment.clone());
+        let function = LoxFunction::new(stmt.clone(), self.environment.clone(), false);
         self.environment.try_write().unwrap().define(
             stmt.name.lexeme.clone(),
             Some(obj!(function; @rr Object::Function)),
@@ -74,6 +76,29 @@ impl stmt::Visit<()> for Interpreter {
         if let Some(ref value) = stmt.value {
             throw(ReturnException(self.evaluate(value)));
         }
+    }
+
+    fn visit_class_stmt(&mut self, stmt: &stmt::Class) {
+        self.environment
+            .try_write()
+            .unwrap()
+            .define(stmt.name.lexeme.clone(), None);
+
+        let mut methods = HashMap::new();
+        for method in &stmt.methods {
+            let function = LoxFunction::new(
+                method.clone(),
+                self.environment.clone(),
+                method.name.lexeme == "init",
+            );
+            methods.insert(method.name.lexeme.clone(), function);
+        }
+
+        let class = Object::Class(LoxClass::new(stmt.name.lexeme.clone(), methods));
+        self.environment
+            .try_write()
+            .unwrap()
+            .assign(stmt.name.clone(), class);
     }
 }
 
@@ -150,7 +175,7 @@ impl expr::Visit<Object> for Interpreter {
     }
 
     fn visit_variable_expr(&mut self, expr: &expr::Variable) -> Object {
-        self.lookup_variable(&expr.name, expr)
+        self.lookup_variable(&expr.name, &expr::Expr::Variable(expr.clone()))
     }
 
     fn visit_assign_expr(&mut self, expr: &expr::Assign) -> Object {
@@ -197,7 +222,7 @@ impl expr::Visit<Object> for Interpreter {
             panic!("{} Can only call functions and classes.", expr.paren)
         }
 
-        let function = crate::downcast!(callee =>Object::Function);
+        let function = crate::downcast_to_lox_callable!(callee);
         if arguemnts.len() != function.try_read().unwrap().arity() {
             panic!(
                 "{} expected {} arguemnts but got {}.",
@@ -208,6 +233,28 @@ impl expr::Visit<Object> for Interpreter {
         }
 
         function.clone().try_read().unwrap().call(self, arguemnts)
+    }
+
+    fn visit_get_expr(&mut self, expr: &expr::Get) -> Object {
+        let object = self.evaluate(&expr.object);
+        if let Object::Instance(instance) = object {
+            return instance.get(&expr.name);
+        }
+        panic!("{} Only instances have properties", &expr.name)
+    }
+
+    fn visit_set_expr(&mut self, expr: &expr::Set) -> Object {
+        let object = self.evaluate(&expr.object);
+        if let Object::Instance(mut instance) = object {
+            let value = self.evaluate(&expr.value);
+            instance.set(expr.name.clone(), value.clone());
+            return value;
+        }
+        panic!("{} Only instances have fields", expr.name)
+    }
+
+    fn visit_this_expr(&mut self, expr: &expr::This) -> Object {
+        self.lookup_variable(&expr.keyword, &expr::Expr::This(expr.clone()))
     }
 }
 
@@ -279,8 +326,8 @@ impl Interpreter {
         self.environment = previous;
     }
 
-    fn lookup_variable(&mut self, name: &crate::scanner::Token, expr: &expr::Variable) -> Object {
-        if let Some(distance) = self.locals.get(&expr::Expr::Variable(expr.clone())) {
+    fn lookup_variable(&mut self, name: &crate::scanner::Token, expr: &expr::Expr) -> Object {
+        if let Some(distance) = self.locals.get(expr) {
             self.environment
                 .try_read()
                 .unwrap()

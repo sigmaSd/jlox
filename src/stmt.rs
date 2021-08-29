@@ -7,6 +7,8 @@ ast!(
 
 Block => visit_block_stmt => statements Vec<Stmt>,
 
+Class => visit_class_stmt => name Token methods Vec<Function>,
+
 Expression => visit_expression_stmt => expression Expr,
 
 Function => visit_function_stmt => name Token params Vec<Token> body Vec<Stmt>,
@@ -21,4 +23,3 @@ Return => visit_return_stmt => keyword Token value Option<Expr>,
 
 While => visit_while_stmt => condition Expr body Box<Stmt>,
 );
-

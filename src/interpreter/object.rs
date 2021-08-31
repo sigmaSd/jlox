@@ -1,11 +1,14 @@
-use crate::interpreter::LoxCallable;
-
 use std::{
     fmt,
     sync::{Arc, RwLock},
 };
 
+use self::{class::LoxClass, instance::LoxInstance, lox_callable::LoxCallable};
+
 pub mod class;
+pub mod function;
+mod instance;
+pub mod lox_callable;
 
 #[derive(Clone)]
 pub enum Object {
@@ -13,8 +16,8 @@ pub enum Object {
     String(String),
     Bool(bool),
     Function(Arc<RwLock<dyn LoxCallable>>),
-    Class(class::LoxClass),
-    Instance(class::LoxInstance),
+    Class(LoxClass),
+    Instance(LoxInstance),
     Null,
 }
 impl Default for Object {
@@ -93,6 +96,7 @@ impl Object {
 macro_rules! downcast_to_lox_callable {
     ($obj: expr) => {
         {
+        use crate::interpreter::object::lox_callable::LoxCallable;
         let callable: Arc<RwLock<dyn LoxCallable>> =
         crate::try_downcast!($obj.clone() => Object::Function).unwrap_or_else(||
 

@@ -1,5 +1,5 @@
 use crate::downcast;
-use crate::interpreter::lox_callable::{Clock, LoxFunction};
+use crate::interpreter::object::function::{Clock, LoxFunction};
 use crate::{expr, obj, scanner::TokenType, stmt};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
@@ -8,8 +8,6 @@ mod environment;
 use environment::Environment;
 mod object;
 pub use object::Object;
-mod lox_callable;
-use lox_callable::LoxCallable;
 
 use trycatch::{throw, Exception};
 

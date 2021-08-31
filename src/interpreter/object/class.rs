@@ -1,13 +1,8 @@
+use std::collections::HashMap;
 
-use std::{
-    collections::HashMap,
-    sync::{Arc, RwLock},
-};
+use crate::interpreter::Object;
 
-use crate::interpreter::{
-    lox_callable::{LoxCallable, LoxFunction},
-    Object,
-};
+use super::{function::LoxFunction, instance::LoxInstance, lox_callable::LoxCallable};
 
 #[derive(Debug, Clone)]
 pub struct LoxClass {
@@ -66,39 +61,5 @@ impl LoxCallable for LoxClass {
                 .call(interpreter, arguemnts);
         }
         Object::Instance(instance)
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct LoxInstance {
-    pub class: LoxClass,
-    fields: Arc<RwLock<HashMap<String, Object>>>,
-}
-
-impl LoxInstance {
-    pub fn new(class: LoxClass) -> Self {
-        Self {
-            class,
-            fields: Default::default(),
-        }
-    }
-    pub fn get(&self, name: &crate::scanner::Token) -> Object {
-        if let Some(field) = self.fields.try_read().unwrap().get(&name.lexeme) {
-            return field.clone();
-        }
-        let method = self.class.find_method(&name.lexeme);
-        if let Some(method) = method {
-            return Object::Function(Arc::new(RwLock::new(method.bind(self.clone()))));
-        }
-        panic!("{} Undefined property '{}'", name, name.lexeme)
-    }
-
-    pub(crate) fn set(&mut self, name: crate::scanner::Token, value: Object) {
-        self.fields.try_write().unwrap().insert(name.lexeme, value);
-    }
-}
-impl std::fmt::Display for LoxInstance {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} instance", self.class.name)
     }
 }

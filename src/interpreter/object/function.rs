@@ -5,16 +5,12 @@ use std::{
 
 use trycatch::{catch, CatchError, ExceptionDowncast};
 
-use crate::{null_obj, obj, stmt};
-
-use super::{
-    environment::Environment, object::class::LoxInstance, Interpreter, Object, ReturnException,
+use crate::{
+    interpreter::{environment::Environment, Interpreter, ReturnException},
+    null_obj, obj, stmt,
 };
 
-pub trait LoxCallable: Send + Sync {
-    fn arity(&self) -> usize;
-    fn call(&self, _interpreter: &mut Interpreter, _arguemnts: Vec<Object>) -> Object;
-}
+use super::{instance::LoxInstance, lox_callable::LoxCallable, Object};
 
 #[derive(Debug, Clone)]
 pub struct LoxFunction {

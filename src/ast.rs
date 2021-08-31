@@ -12,6 +12,13 @@ macro_rules! ast {
              $ast_expr($ast_expr),
          )+
         }
+        $(
+        impl From<$ast_expr> for $name {
+            fn from(expr: $ast_expr) -> Self {
+                Self::$ast_expr(expr)
+            }
+        }
+        )+
 
         impl $name {
         pub fn accept<R>(&self, visitor: &mut dyn Visit<R>) -> R {

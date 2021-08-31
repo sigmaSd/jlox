@@ -6,7 +6,7 @@ use crate::{interpreter::Object, scanner::Token};
 #[derive(Debug, Clone)]
 pub struct Environment {
     values: HashMap<String, Option<Object>>,
-    enclosing: Option<Arc<RwLock<Environment>>>,
+    pub enclosing: Option<Arc<RwLock<Environment>>>,
 }
 
 impl Environment {

@@ -115,12 +115,19 @@ impl Parser {
         if self.tmatch([TokenType::NIL]) {
             return Expr::Literal(expr::Literal { value: null_obj!() }).into();
         }
-
         if self.tmatch([TokenType::NUMBER, TokenType::STRING]) {
             return Expr::Literal(expr::Literal {
                 value: self.previous().clone().literal,
             })
             .into();
+        }
+        if self.tmatch(TokenType::SUPER) {
+            let keyword = self.previous().clone();
+            self.consume(TokenType::DOT, "Expect '.' after 'super'.");
+            let method = self
+                .consume(TokenType::IDENTIFIER, "Expect superclass method name.")
+                .clone();
+            return Expr::Super(expr::Super { keyword, method }).into();
         }
         if self.tmatch([TokenType::THIS]) {
             return Expr::This(expr::This {
@@ -515,6 +522,15 @@ impl Parser {
         let name = self
             .consume(TokenType::IDENTIFIER, "Expect class name")
             .clone();
+
+        let mut superclass = None;
+        if self.tmatch(TokenType::LESS) {
+            self.consume(TokenType::IDENTIFIER, "Expect superclass name.");
+            superclass = Some(expr::Variable {
+                name: self.previous().clone(),
+            });
+        }
+
         self.consume(TokenType::LEFT_BRACE, "Expect '{' before class body.");
 
         let mut methods = vec![];
@@ -522,6 +538,10 @@ impl Parser {
             methods.push(self.function("method"));
         }
         self.consume(TokenType::RIGHT_BRACE, "Expect '}' after class body.");
-        Stmt::Class(stmt::Class { name, methods })
+        Stmt::Class(stmt::Class {
+            name,
+            superclass,
+            methods,
+        })
     }
 }

@@ -20,15 +20,30 @@ pub mod class {
     pub struct LoxClass {
         pub name: String,
         methods: HashMap<String, LoxFunction>,
+        superclass: Option<Box<LoxClass>>,
     }
 
     impl LoxClass {
-        pub fn new(name: String, methods: HashMap<String, LoxFunction>) -> Self {
-            Self { name, methods }
+        pub fn new(
+            name: String,
+            superclass: Option<LoxClass>,
+            methods: HashMap<String, LoxFunction>,
+        ) -> Self {
+            Self {
+                name,
+                methods,
+                superclass: superclass.map(Box::new),
+            }
         }
 
         pub(crate) fn find_method(&self, name: &str) -> Option<LoxFunction> {
-            self.methods.get(name).cloned()
+            if let Some(method) = self.methods.get(name) {
+                return Some(method.clone());
+            }
+            if let Some(ref superclass) = self.superclass {
+                return superclass.find_method(name);
+            }
+            None
         }
     }
     impl std::fmt::Display for LoxClass {
@@ -167,7 +182,11 @@ impl Object {
         matches!(self, Self::String(_))
     }
     pub fn is_fun(&self) -> bool {
+        // class also implements LoxCallable
         matches!(self, Self::Function(_) | Self::Class(_))
+    }
+    pub fn is_class(&self) -> bool {
+        matches!(self, Self::Class(_))
     }
     pub fn is_null(&self) -> bool {
         matches!(self, Self::Null)

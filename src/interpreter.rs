@@ -79,10 +79,26 @@ impl stmt::Visit<()> for Interpreter {
     }
 
     fn visit_class_stmt(&mut self, stmt: &stmt::Class) {
+        let superclass = if let Some(ref superclass) = stmt.superclass {
+            let superclass = self.evaluate(&superclass.clone().into());
+            if !superclass.is_class() {
+                panic!("Superclass must be a class")
+            }
+            Some(superclass)
+        } else {
+            None
+        };
+
         self.environment
             .try_write()
             .unwrap()
             .define(stmt.name.lexeme.clone(), None);
+
+        if let Some(ref superclass) = superclass {
+            let mut environment = Environment::new(Some(self.environment.clone()));
+            environment.define("super".into(), Some(superclass.clone()));
+            self.environment = Arc::new(RwLock::new(environment));
+        }
 
         let mut methods = HashMap::new();
         for method in &stmt.methods {
@@ -94,7 +110,22 @@ impl stmt::Visit<()> for Interpreter {
             methods.insert(method.name.lexeme.clone(), function);
         }
 
-        let class = Object::Class(LoxClass::new(stmt.name.lexeme.clone(), methods));
+        let class = Object::Class(LoxClass::new(
+            stmt.name.lexeme.clone(),
+            superclass.map(|class| downcast!(class => Object::Class)),
+            methods,
+        ));
+        if stmt.superclass.is_some() {
+            self.environment = self
+                .environment
+                .clone()
+                .try_read()
+                .unwrap()
+                .enclosing
+                .clone()
+                .unwrap();
+        }
+
         self.environment
             .try_write()
             .unwrap()
@@ -255,6 +286,29 @@ impl expr::Visit<Object> for Interpreter {
 
     fn visit_this_expr(&mut self, expr: &expr::This) -> Object {
         self.lookup_variable(&expr.keyword, &expr::Expr::This(expr.clone()))
+    }
+
+    fn visit_super_expr(&mut self, expr: &expr::Super) -> Object {
+        let distance = self.locals.get(&expr.clone().into()).unwrap();
+        let superclass = self
+            .environment
+            .try_read()
+            .unwrap()
+            .get_at(distance, "super");
+        let object = self
+            .environment
+            .try_read()
+            .unwrap()
+            .get_at(&(*distance - 1), "this");
+        if let Some(method) =
+            downcast!(superclass => Object::Class).find_method(&expr.method.lexeme)
+        {
+            Object::Function(Arc::new(RwLock::new(
+                method.bind(downcast!( object => Object::Instance)),
+            )))
+        } else {
+            panic!("Undefined property '{}'.", expr.method.lexeme)
+        }
     }
 }
 

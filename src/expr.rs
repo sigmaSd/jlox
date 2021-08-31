@@ -19,6 +19,8 @@ Logical => visit_logical_expr => left Box<Expr> operator Token right Box<Expr>,
 
 Unary => visit_unary_expr => operator Token right Box<Expr>,
 
+Super => visit_super_expr => keyword Token method Token,
+
 This => visit_this_expr => keyword Token,
 
 Set => visit_set_expr => object Box<Expr> name Token value Box<Expr>,

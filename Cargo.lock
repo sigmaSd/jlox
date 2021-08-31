@@ -12,6 +12,7 @@ dependencies = [
 [[package]]
 name = "trycatch"
 version = "0.1.0"
+source = "git+https://github.com/sigmaSd/trycatch#1db8435057182d9df87081b9bc0fe78eb5fa86b5"
 dependencies = [
  "trycatch-derive",
 ]
@@ -19,3 +20,4 @@ dependencies = [
 [[package]]
 name = "trycatch-derive"
 version = "0.1.0"
+source = "git+https://github.com/sigmaSd/trycatch#1db8435057182d9df87081b9bc0fe78eb5fa86b5"

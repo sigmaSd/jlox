@@ -22,6 +22,7 @@ enum FunctionType {
 enum ClassType {
     None,
     Class,
+    SubClass,
 }
 
 impl stmt::Visit<()> for Resolver<'_> {
@@ -84,7 +85,19 @@ impl stmt::Visit<()> for Resolver<'_> {
 
         self.define(&stmt.name);
 
+        if let Some(ref superclass) = stmt.superclass {
+            if stmt.name.lexeme == superclass.name.lexeme {
+                panic!("A class can't inherit from itself.")
+            }
+            self.current_class = ClassType::SubClass;
+            self.resolve_expr(&superclass.clone().into());
+        }
+        if stmt.superclass.is_some() {
+            self.begin_scope();
+            self.scopes.last_mut().unwrap().insert("super".into(), true);
+        }
         self.begin_scope();
+
         self.scopes
             .last_mut()
             .unwrap()
@@ -98,7 +111,12 @@ impl stmt::Visit<()> for Resolver<'_> {
             };
             self.resolve_function(method, declaration);
         }
+
         self.end_scope();
+        if stmt.superclass.is_some() {
+            self.end_scope();
+        }
+
         self.current_class = enclosing_class;
     }
 }
@@ -167,6 +185,18 @@ impl expr::Visit<()> for Resolver<'_> {
             panic!("Can't use 'this' outside of a class.")
         }
         self.resolve_local(&expr::Expr::This(expr.clone()), &expr.keyword);
+    }
+
+    fn visit_super_expr(&mut self, expr: &expr::Super) {
+        if matches!(self.current_class, ClassType::None) {
+            panic!("{} Can't use 'super' outside of a class.", expr.keyword);
+        } else if !matches!(self.current_class, ClassType::SubClass) {
+            panic!(
+                "{} Can't use 'super' in a class with no superclass.",
+                expr.keyword
+            );
+        }
+        self.resolve_local(&expr.clone().into(), &expr.keyword);
     }
 }
 

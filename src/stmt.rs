@@ -1,5 +1,5 @@
 use crate::ast;
-use crate::expr::Expr;
+use crate::expr::{self, Expr};
 use crate::scanner::Token;
 
 ast!(
@@ -7,7 +7,7 @@ ast!(
 
 Block => visit_block_stmt => statements Vec<Stmt>,
 
-Class => visit_class_stmt => name Token methods Vec<Function>,
+Class => visit_class_stmt => name Token superclass Option<expr::Variable> methods Vec<Function>,
 
 Expression => visit_expression_stmt => expression Expr,
 

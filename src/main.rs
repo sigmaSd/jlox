@@ -1,4 +1,4 @@
-use lox::{Lox, Result};
+use jlox::{Lox, Result};
 
 fn main() -> Result<()> {
     let mut lox = Lox::default();

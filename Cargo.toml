@@ -6,7 +6,8 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-trycatch = { git = "https://github.com/sigmaSd/trycatch" }
+trycatch = { git = "https://github.com/sigmaSd/trycatch"}
+uuid = {version = "0.8.2", features = ["v4"]}
 
 [profile.release]
 debug = true

@@ -1,26 +1,28 @@
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
+use trycatch::throw;
+
 use crate::{interpreter::Object, scanner::Token};
 
 #[derive(Debug, Clone)]
 pub struct Environment {
-    values: HashMap<String, Option<Object>>,
+    values: Arc<RwLock<HashMap<String, Option<Object>>>>,
     pub enclosing: Option<Arc<RwLock<Environment>>>,
 }
 
 impl Environment {
     pub fn new(enclosing: Option<Arc<RwLock<Environment>>>) -> Self {
         Self {
-            values: HashMap::new(),
+            values: Default::default(),
             enclosing,
         }
     }
     pub fn define(&mut self, name: String, value: Option<Object>) {
-        self.values.insert(name, value);
+        self.values.try_write().unwrap().insert(name, value);
     }
     pub fn get(&self, token: &Token) -> Object {
-        if let Some(Some(obj)) = self.values.get(&token.lexeme) {
+        if let Some(Some(obj)) = self.values.try_read().unwrap().get(&token.lexeme) {
             return obj.clone();
         }
         // search the enclosing env
@@ -32,13 +34,18 @@ impl Environment {
             return obj;
         }
 
-        panic!("Undefined variable '{}'.", token.lexeme)
+        throw(format!(
+            "Undefined variable '{}'.\n[line {}]",
+            token.lexeme, token.line
+        ))
     }
     pub fn get_at(&self, distance: &usize, name: &str) -> Object {
         self.ancestor(distance)
             .try_read()
             .unwrap()
             .values
+            .try_read()
+            .unwrap()
             .get(name)
             .as_ref()
             .unwrap()
@@ -48,7 +55,7 @@ impl Environment {
     }
     pub fn assign(&mut self, name: Token, value: Object) {
         if let std::collections::hash_map::Entry::Occupied(mut e) =
-            self.values.entry(name.lexeme.clone())
+            self.values.try_write().unwrap().entry(name.lexeme.clone())
         {
             e.insert(Some(value));
             return;
@@ -58,7 +65,10 @@ impl Environment {
             enclosing.try_write().unwrap().assign(name, value);
             return;
         }
-        eprintln!("Undefined variable: '{}'", name.lexeme)
+        throw(format!(
+            "Undefined variable '{}'.\n[line {}]",
+            name.lexeme, name.line
+        ))
     }
 
     fn ancestor(&self, distance: &usize) -> Arc<RwLock<Environment>> {
@@ -80,6 +90,8 @@ impl Environment {
             .try_write()
             .unwrap()
             .values
+            .try_write()
+            .unwrap()
             .insert(name.lexeme, Some(value));
     }
 }

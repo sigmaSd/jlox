@@ -1,6 +1,9 @@
 use std::collections::HashMap;
 
-use crate::interpreter::Object;
+use crate::{
+    ar,
+    interpreter::{Object, ObjectInner},
+};
 
 use super::{function::LoxFunction, instance::LoxInstance, lox_callable::LoxCallable};
 
@@ -60,6 +63,6 @@ impl LoxCallable for LoxClass {
                 .bind(instance.clone())
                 .call(interpreter, arguemnts);
         }
-        Object::Instance(instance)
+        ar!(ObjectInner::Instance(instance))
     }
 }

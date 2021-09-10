@@ -1,5 +1,5 @@
-use crate::downcast;
 use crate::interpreter::object::function::{Clock, LoxFunction};
+use crate::{ar, downcast, null_obj};
 use crate::{expr, obj, scanner::TokenType, stmt};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
@@ -8,16 +8,17 @@ mod environment;
 use environment::Environment;
 mod object;
 pub use object::Object;
+pub use object::ObjectInner;
 
 use trycatch::{throw, Exception};
 
 use self::object::class::LoxClass;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Interpreter {
     environment: Arc<RwLock<Environment>>,
     globals: Arc<RwLock<Environment>>,
-    locals: HashMap<expr::Expr, usize>,
+    pub locals: Arc<RwLock<HashMap<expr::Expr, usize>>>,
 }
 
 impl stmt::Visit<()> for Interpreter {
@@ -31,14 +32,15 @@ impl stmt::Visit<()> for Interpreter {
     }
 
     fn visit_var_stmt(&mut self, stmt: &stmt::Var) {
-        let mut value = None;
-        if let Some(ref initializer) = stmt.initializer {
-            value = Some(self.evaluate(initializer));
-        }
+        let value = if let Some(ref initializer) = stmt.initializer {
+            self.evaluate(initializer)
+        } else {
+            null_obj!()
+        };
         self.environment
             .try_write()
             .unwrap()
-            .define(stmt.name.lexeme.clone(), value);
+            .define(stmt.name.lexeme.clone(), Some(value));
     }
 
     fn visit_block_stmt(&mut self, stmt: &stmt::Block) {
@@ -66,21 +68,27 @@ impl stmt::Visit<()> for Interpreter {
         let function = LoxFunction::new(stmt.clone(), self.environment.clone(), false);
         self.environment.try_write().unwrap().define(
             stmt.name.lexeme.clone(),
-            Some(obj!(function; @rr Object::Function)),
+            Some(obj!(function; @rr ObjectInner::Function)),
         );
     }
 
     fn visit_return_stmt(&mut self, stmt: &stmt::Return) {
-        if let Some(ref value) = stmt.value {
-            throw(ReturnException(self.evaluate(value)));
-        }
+        let value = if let Some(ref value) = stmt.value {
+            self.evaluate(value)
+        } else {
+            null_obj!()
+        };
+        throw(ReturnException(value));
     }
 
     fn visit_class_stmt(&mut self, stmt: &stmt::Class) {
         let superclass = if let Some(ref superclass) = stmt.superclass {
             let superclass = self.evaluate(&superclass.clone().into());
             if !superclass.is_class() {
-                panic!("Superclass must be a class")
+                throw(format!(
+                    "Superclass must be a class.\n[line {}]",
+                    stmt.name.line
+                ))
             }
             Some(superclass)
         } else {
@@ -108,11 +116,11 @@ impl stmt::Visit<()> for Interpreter {
             methods.insert(method.name.lexeme.clone(), function);
         }
 
-        let class = Object::Class(LoxClass::new(
+        let class = ar!(ObjectInner::Class(LoxClass::new(
             stmt.name.lexeme.clone(),
-            superclass.map(|class| downcast!(class => Object::Class)),
+            superclass.map(|class| downcast!(class => ObjectInner::Class)),
             methods,
-        ));
+        )));
         if stmt.superclass.is_some() {
             self.environment = self
                 .environment
@@ -142,42 +150,46 @@ impl expr::Visit<Object> for Interpreter {
         match expr.operator.ttype {
             TokenType::MINUS => {
                 check_number_operands(&expr.operator, [&left, &right]);
-                return obj!(downcast!(left => Object::Number) - downcast!(right => Object::Number) ; Object::Number);
+                return obj!(downcast!(left => ObjectInner::Number) - downcast!(right => ObjectInner::Number) ; ObjectInner::Number);
             }
             TokenType::PLUS => {
                 if left.is_num() && right.is_num() {
-                    return obj!(downcast!(left => Object::Number) + downcast!(right => Object::Number) ; Object::Number);
+                    return obj!(downcast!(left => ObjectInner::Number) + downcast!(right => ObjectInner::Number) ; ObjectInner::Number);
                 }
                 if left.is_str() && right.is_str() {
-                    return obj!(downcast!(left => Object::String) + &downcast!(right => Object::String) ; Object::String);
+                    return obj!(downcast!(left => ObjectInner::String) + &downcast!(right => ObjectInner::String) ; ObjectInner::String);
                 }
-                panic!("+ only supports numbers and strings")
+                throw(format!(
+                    "Operands must be two numbers or two strings.\n[line {}]",
+                    expr.operator.line
+                ))
             }
             TokenType::SLASH => {
                 check_number_operands(&expr.operator, [&left, &right]);
-                return obj!(downcast!(left => Object::Number) / downcast!(right => Object::Number) ; Object::Number);
+                return obj!(downcast!(left => ObjectInner::Number) / downcast!(right => ObjectInner::Number) ; ObjectInner::Number);
             }
             TokenType::STAR => {
                 check_number_operands(&expr.operator, [&left, &right]);
-                return obj!(downcast!(left => Object::Number) * downcast!(right => Object::Number) ; Object::Number);
+                return obj!(downcast!(left => ObjectInner::Number) * downcast!(right => ObjectInner::Number) ; ObjectInner::Number);
             }
             TokenType::GREATER => {
-                check_number_operands(&expr.operator, [&right]);
-                return obj!(downcast!(left => Object::Number) > downcast!(right => Object::Number) ; Object::Bool);
+                check_number_operands(&expr.operator, [&left, &right]);
+                return obj!(downcast!(left => ObjectInner::Number) > downcast!(right => ObjectInner::Number) ; ObjectInner::Bool);
             }
             TokenType::GREATER_EQUAL => {
                 check_number_operands(&expr.operator, [&left, &right]);
-                return obj!(downcast!(left => Object::Number) >= downcast!(right => Object::Number) ; Object::Bool);
+                return obj!(downcast!(left => ObjectInner::Number) >= downcast!(right => ObjectInner::Number) ; ObjectInner::Bool);
             }
             TokenType::LESS => {
                 check_number_operands(&expr.operator, [&left, &right]);
-                return obj!(downcast!(left => Object::Number) < downcast!(right => Object::Number) ; Object::Bool);
+                return obj!(downcast!(left => ObjectInner::Number) < downcast!(right => ObjectInner::Number) ; ObjectInner::Bool);
             }
             TokenType::LESS_EQUAL => {
-                return obj!(downcast!(left => Object::Number) <= downcast!(right => Object::Number) ; Object::Bool);
+                check_number_operands(&expr.operator, [&left, &right]);
+                return obj!(downcast!(left => ObjectInner::Number) <= downcast!(right => ObjectInner::Number) ; ObjectInner::Bool);
             }
-            TokenType::BANG_EQUAL => return obj!(!is_equal(left, right) ; Object::Bool),
-            TokenType::EQUAL_EQUAL => return obj!(is_equal(left, right) ; Object::Bool),
+            TokenType::BANG_EQUAL => return obj!(!is_equal(left, right) ; ObjectInner::Bool),
+            TokenType::EQUAL_EQUAL => return obj!(is_equal(left, right) ; ObjectInner::Bool),
             _ => unreachable!(),
         }
     }
@@ -195,9 +207,9 @@ impl expr::Visit<Object> for Interpreter {
         match expr.operator.ttype {
             TokenType::MINUS => {
                 check_number_operands(&expr.operator, [&right]);
-                return obj!(-downcast!(right =>Object::Number); Object::Number);
+                return obj!(-downcast!(right =>ObjectInner::Number); ObjectInner::Number);
             }
-            TokenType::BANG => return obj!(!is_truthy(&right); Object::Bool),
+            TokenType::BANG => return obj!(!is_truthy(&right); ObjectInner::Bool),
 
             _ => unreachable!(),
         }
@@ -209,7 +221,12 @@ impl expr::Visit<Object> for Interpreter {
 
     fn visit_assign_expr(&mut self, expr: &expr::Assign) -> Object {
         let value = self.evaluate(&expr.value);
-        let distance = self.locals.get(&expr::Expr::Assign(expr.clone()));
+        let distance = self.locals.try_read();
+
+        let distance = distance
+            .as_ref()
+            .unwrap()
+            .get(&expr::Expr::Assign(expr.clone()));
         if let Some(distance) = distance {
             self.environment.try_write().unwrap().assign_at(
                 distance,
@@ -248,17 +265,20 @@ impl expr::Visit<Object> for Interpreter {
         }
 
         if !callee.is_fun() {
-            panic!("{} Can only call functions and classes.", expr.paren)
+            throw(format!(
+                "Can only call functions and classes.\n [line {}]",
+                expr.paren.line
+            ))
         }
 
         let function = crate::downcast_to_lox_callable!(callee);
         if arguemnts.len() != function.try_read().unwrap().arity() {
-            panic!(
-                "{} expected {} arguemnts but got {}.",
-                expr.paren,
+            throw(format!(
+                "Expected {} arguments but got {}.\n[line {}]",
                 function.try_read().unwrap().arity(),
-                arguemnts.len()
-            )
+                arguemnts.len(),
+                expr.paren.line,
+            ))
         }
 
         function.clone().try_read().unwrap().call(self, arguemnts)
@@ -266,20 +286,26 @@ impl expr::Visit<Object> for Interpreter {
 
     fn visit_get_expr(&mut self, expr: &expr::Get) -> Object {
         let object = self.evaluate(&expr.object);
-        if let Object::Instance(instance) = object {
+        if let ObjectInner::Instance(instance) = object.0 {
             return instance.get(&expr.name);
         }
-        panic!("{} Only instances have properties", &expr.name)
+        throw(format!(
+            "Only instances have properties.\n[line {}]",
+            &expr.name.line
+        ))
     }
 
     fn visit_set_expr(&mut self, expr: &expr::Set) -> Object {
         let object = self.evaluate(&expr.object);
-        if let Object::Instance(mut instance) = object {
+        if let ObjectInner::Instance(mut instance) = object.0 {
             let value = self.evaluate(&expr.value);
             instance.set(expr.name.clone(), value.clone());
             return value;
         }
-        panic!("{} Only instances have fields", expr.name)
+        throw(format!(
+            "Only instances have fields.\n[line {}]",
+            expr.name.line
+        ))
     }
 
     fn visit_this_expr(&mut self, expr: &expr::This) -> Object {
@@ -287,7 +313,12 @@ impl expr::Visit<Object> for Interpreter {
     }
 
     fn visit_super_expr(&mut self, expr: &expr::Super) -> Object {
-        let distance = self.locals.get(&expr.clone().into()).unwrap();
+        let distance = self.locals.try_read();
+        let distance = distance
+            .as_ref()
+            .unwrap()
+            .get(&expr.clone().into())
+            .unwrap();
         let superclass = self
             .environment
             .try_read()
@@ -299,13 +330,16 @@ impl expr::Visit<Object> for Interpreter {
             .unwrap()
             .get_at(&(*distance - 1), "this");
         if let Some(method) =
-            downcast!(superclass => Object::Class).find_method(&expr.method.lexeme)
+            downcast!(superclass => ObjectInner::Class).find_method(&expr.method.lexeme)
         {
-            Object::Function(Arc::new(RwLock::new(
-                method.bind(downcast!( object => Object::Instance)),
-            )))
+            ar!(ObjectInner::Function(Arc::new(RwLock::new(
+                method.bind(downcast!( object => ObjectInner::Instance)),
+            ))))
         } else {
-            panic!("Undefined property '{}'.", expr.method.lexeme)
+            throw(format!(
+                "Undefined property '{}'.\n[line {}]",
+                expr.method.lexeme, expr.method.line
+            ))
         }
     }
 }
@@ -314,10 +348,21 @@ fn check_number_operands<'a>(
     operator: &crate::scanner::Token,
     operators: impl IntoIterator<Item = &'a Object>,
 ) {
-    if operators.into_iter().all(Object::is_num) {
+    let operators: Vec<_> = operators.into_iter().collect();
+    if operators.iter().all(|obj| obj.is_num()) {
         return;
     }
-    panic!("{} Operand must be a number.", operator);
+    if operators.len() > 1 {
+        throw(format!(
+            "Operands must be numbers.\n[line {}]",
+            operator.line
+        ));
+    } else {
+        throw(format!(
+            "Operand must be a number.\n[line {}]",
+            operator.line
+        ));
+    }
 }
 fn is_equal(right: Object, left: Object) -> bool {
     right == left
@@ -327,9 +372,7 @@ fn is_truthy(right: &Object) -> bool {
     if right.is_null() {
         return false;
     }
-    crate::try_downcast!(right => Object::Bool)
-        .cloned()
-        .unwrap_or(true)
+    crate::try_downcast!(right => ObjectInner::Bool).unwrap_or(true)
 }
 
 impl Default for Interpreter {
@@ -338,15 +381,15 @@ impl Default for Interpreter {
         //FIXME
         let environment = globals.clone();
 
-        globals
-            .try_write()
-            .unwrap()
-            .define("clock".into(), Some(obj!(Clock{}; @rr Object::Function)));
+        globals.try_write().unwrap().define(
+            "clock".into(),
+            Some(obj!(Clock{}; @rr ObjectInner::Function)),
+        );
 
         Self {
             globals,
             environment,
-            locals: HashMap::new(),
+            locals: Default::default(),
         }
     }
 }
@@ -365,7 +408,7 @@ impl Interpreter {
     }
 
     pub(crate) fn resolve(&mut self, expr: &expr::Expr, depth: usize) {
-        self.locals.insert(expr.clone(), depth);
+        self.locals.try_write().unwrap().insert(expr.clone(), depth);
     }
 
     /// Execute a block using a new empty environment with our original environment as enclosing
@@ -379,7 +422,7 @@ impl Interpreter {
     }
 
     fn lookup_variable(&mut self, name: &crate::scanner::Token, expr: &expr::Expr) -> Object {
-        if let Some(distance) = self.locals.get(expr) {
+        if let Some(distance) = self.locals.try_read().unwrap().get(expr) {
             self.environment
                 .try_read()
                 .unwrap()
@@ -391,7 +434,7 @@ impl Interpreter {
 }
 fn stringify(obj: Object) -> String {
     if obj.is_num() {
-        let text = downcast!(obj => Object::Number).to_string();
+        let text = downcast!(obj => ObjectInner::Number).to_string();
         text.trim_end_matches(".0").to_string()
     } else {
         obj.to_string()

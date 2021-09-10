@@ -1,6 +1,7 @@
 use std::{
     io::{self, Write},
     path::Path,
+    process,
 };
 
 mod ast;
@@ -14,6 +15,7 @@ use interpreter::Interpreter;
 use parser::Parser;
 use resolver::Resolver;
 use scanner::Scanner;
+use trycatch::{catch, CatchError};
 
 pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -27,27 +29,43 @@ impl Lox {
         // scanner
         let mut scanner = Scanner::new(code.to_string());
         let tokens = scanner.scan_tokens();
+        if scanner.had_error {
+            process::exit(65)
+        }
 
         // parser
         let mut parser = Parser::new(tokens);
-        let stmts = std::panic::catch_unwind(move || parser.parse());
-        if stmts.is_err() {
-            return;
+        let stmts = parser.parse();
+        if parser.had_error {
+            process::exit(65)
         }
-        let stmts = stmts.unwrap();
+        // let stmts = catch(move || parser.parse());
+        // if let Err(CatchError::Exception(e)) = stmts {
+        //     downcast_exception_print_it_and_return!(65, e => &'static str String);
+        // }
+        // let stmts = stmts.unwrap();
 
-        let mut resolver = Resolver::new(&mut self.interpreter);
+        // resolver
+        let mut resolver = Resolver::new(self.interpreter.clone());
         resolver.resolve_stmts(&stmts);
+
+        if resolver.had_error {
+            process::exit(65)
+        }
 
         // interpreter
         // Note: Catch is not very robust, because the fields of the interpreter are still shared
         let mut interpreter = self.interpreter.clone();
-        let interpret_result = std::panic::catch_unwind(move || {
+        let interpret_result = catch(move || {
             interpreter.interpret(stmts);
             interpreter
         });
-        if let Ok(interpreter) = interpret_result {
-            self.interpreter = interpreter;
+        match interpret_result {
+            Ok(interpreter) => self.interpreter = interpreter,
+            Err(CatchError::Exception(e)) => {
+                downcast_exception_print_it_and_return!(70, e => &'static str String);
+            }
+            Err(e) => panic!("{:?}", e),
         }
     }
 
@@ -80,4 +98,39 @@ impl Lox {
         }
         Ok(())
     }
+}
+
+#[macro_export]
+macro_rules! downcast_exception{
+    ($code: expr, $exception: expr => $($type:ty)+) => {
+
+        {
+        let exception = $exception.into_any();
+            if false {
+            }
+        $(
+          else if exception.is::<$type>() {
+              eprintln!("{}",exception.downcast::<$type>().unwrap());
+          }
+         )+
+        }
+
+    };
+}
+#[macro_export]
+macro_rules! downcast_exception_print_it_and_return {
+    ($code: expr, $exception: expr => $($type:ty)+) => {
+
+        {
+        let exception = $exception.into_any();
+        $(
+          if exception.is::<$type>() {
+              eprintln!("{}",exception.downcast::<$type>().unwrap());
+              std::process::exit($code);
+          }
+         )+
+        panic!("Downcasting failed, mismatched type");
+        }
+
+    };
 }

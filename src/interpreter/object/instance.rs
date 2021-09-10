@@ -3,6 +3,10 @@ use std::{
     sync::{Arc, RwLock},
 };
 
+use trycatch::throw;
+
+use crate::{ar, interpreter::ObjectInner};
+
 use super::{class::LoxClass, Object};
 
 #[derive(Debug, Clone)]
@@ -24,9 +28,14 @@ impl LoxInstance {
         }
         let method = self.class.find_method(&name.lexeme);
         if let Some(method) = method {
-            return Object::Function(Arc::new(RwLock::new(method.bind(self.clone()))));
+            return ar!(ObjectInner::Function(Arc::new(RwLock::new(
+                method.bind(self.clone())
+            ))));
         }
-        panic!("{} Undefined property '{}'", name, name.lexeme)
+        throw(format!(
+            "Undefined property '{}'.\n[line {}]",
+            name.lexeme, name.line
+        ))
     }
 
     pub(crate) fn set(&mut self, name: crate::scanner::Token, value: Object) {

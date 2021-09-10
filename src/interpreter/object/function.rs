@@ -1,22 +1,29 @@
 use std::{
+    fmt,
     sync::{Arc, RwLock},
     time::SystemTime,
 };
 
-use trycatch::{catch, CatchError, ExceptionDowncast};
+use trycatch::{catch, throw, CatchError, ExceptionDowncast};
 
 use crate::{
+    ar,
     interpreter::{environment::Environment, Interpreter, ReturnException},
     null_obj, obj, stmt,
 };
 
-use super::{instance::LoxInstance, lox_callable::LoxCallable, Object};
+use super::{instance::LoxInstance, lox_callable::LoxCallable, Object, ObjectInner};
 
 #[derive(Debug, Clone)]
 pub struct LoxFunction {
     declaration: stmt::Function,
     closure: Arc<RwLock<Environment>>,
     is_initializer: bool,
+}
+impl fmt::Display for LoxFunction {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "<fn {}>", self.declaration.name.lexeme)
+    }
 }
 
 impl LoxFunction {
@@ -33,7 +40,7 @@ impl LoxFunction {
     }
     pub fn bind(&self, instance: LoxInstance) -> LoxFunction {
         let mut environment = Environment::new(Some(self.closure.clone()));
-        environment.define("this".into(), Some(Object::Instance(instance)));
+        environment.define("this".into(), Some(ar!(ObjectInner::Instance(instance))));
         LoxFunction {
             declaration: self.declaration.clone(),
             closure: Arc::new(RwLock::new(environment)),
@@ -64,7 +71,10 @@ impl LoxCallable for LoxFunction {
                     if self.is_initializer {
                         self.closure.try_read().unwrap().get_at(&0, "this")
                     } else {
-                        e.downcast::<ReturnException>().0
+                        match e.try_downcast::<ReturnException>() {
+                            Ok(ret) => ret.0,
+                            Err(exception) => throw(*exception.downcast::<String>().unwrap()),
+                        }
                     }
                 }
                 CatchError::Panic(p) => std::panic::panic_any(p),
@@ -77,13 +87,12 @@ impl LoxCallable for LoxFunction {
     }
 }
 
-impl ToString for LoxFunction {
-    fn to_string(&self) -> String {
-        format!("<fn {}>", self.declaration.name.lexeme)
+pub struct Clock {}
+impl fmt::Display for Clock {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "<native fn>")
     }
 }
-
-pub struct Clock {}
 impl LoxCallable for Clock {
     fn arity(&self) -> usize {
         0
@@ -95,7 +104,7 @@ impl LoxCallable for Clock {
                 .duration_since(SystemTime::UNIX_EPOCH)
                 .unwrap()
                 .as_millis() as f64
-                / 1000. ; Object::Number
+                / 1000. ; ObjectInner::Number
         )
     }
 }

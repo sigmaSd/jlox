@@ -1,6 +1,9 @@
 use std::{collections::HashMap, fmt::Display, iter::Once};
 
-use crate::{interpreter::Object, obj};
+use crate::{
+    interpreter::{Object, ObjectInner},
+    null_obj, obj,
+};
 
 pub struct Scanner {
     source: String,
@@ -9,6 +12,7 @@ pub struct Scanner {
     current: usize,
     line: usize,
     keywords: HashMap<&'static str, TokenType>,
+    pub had_error: bool,
 }
 impl Scanner {
     pub fn new(code: String) -> Self {
@@ -19,6 +23,7 @@ impl Scanner {
             current: 0,
             line: 1,
             keywords: Self::keywords(),
+            had_error: false,
         }
     }
     fn keywords() -> HashMap<&'static str, TokenType> {
@@ -105,7 +110,7 @@ impl Scanner {
                 } else if c.is_lalpha() {
                     self.identifier();
                 } else {
-                    eprintln!("{} Unexpected character.", self.line);
+                    eprintln!("[line {}] Error: Unexpected character.", self.line);
                 }
             }
         }
@@ -134,7 +139,7 @@ impl Scanner {
         }
         self.add_token_with_literal(
             TokenType::NUMBER,
-            obj!(self.source[self.start..self.current].parse().unwrap();Object::Number),
+            obj!(self.source[self.start..self.current].parse().unwrap();ObjectInner::Number),
         );
     }
     fn string(&mut self) {
@@ -145,14 +150,15 @@ impl Scanner {
             self.advance();
         }
         if self.is_at_end() {
-            eprintln!("{} Unexpected string.", self.line);
+            eprintln!("[line {}] Error: Unterminated string.", self.line);
+            self.had_error = true;
             return;
         }
 
         assert_eq!(self.advance(), '"');
 
         let value = self.source[self.start + 1..self.current - 1].to_string();
-        self.add_token_with_literal(TokenType::STRING, obj!(value; Object::String));
+        self.add_token_with_literal(TokenType::STRING, obj!(value; ObjectInner::String));
     }
     fn peek(&self) -> Option<char> {
         if self.is_at_end() {
@@ -219,7 +225,7 @@ impl Token {
             ttype,
             lexeme,
             line,
-            literal: Object::Null,
+            literal: null_obj!(),
         }
     }
 }

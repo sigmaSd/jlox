@@ -4,7 +4,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use uuid::Uuid;
+use crate::uuid::Uuid;
 
 use self::{class::LoxClass, instance::LoxInstance, lox_callable::LoxCallable};
 
@@ -29,7 +29,7 @@ pub struct Object(pub ObjectInner, pub Uuid);
 #[macro_export]
 macro_rules! ar {
     ($e: expr) => {
-        Object($e, uuid::Uuid::new_v4())
+        Object($e, crate::uuid::Uuid::new_v4())
     };
 }
 impl Default for Object {

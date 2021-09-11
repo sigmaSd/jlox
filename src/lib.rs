@@ -11,6 +11,7 @@ mod parser;
 mod resolver;
 mod scanner;
 mod stmt;
+pub mod uuid;
 use interpreter::Interpreter;
 use parser::Parser;
 use resolver::Resolver;

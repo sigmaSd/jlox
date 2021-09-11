@@ -5,7 +5,10 @@ use std::{
 
 use trycatch::throw;
 
-use crate::{ar, interpreter::ObjectInner};
+use crate::{
+    ar,
+    interpreter::{ObjectInner, RuntimeError},
+};
 
 use super::{class::LoxClass, Object};
 
@@ -32,9 +35,9 @@ impl LoxInstance {
                 method.bind(self.clone())
             ))));
         }
-        throw(format!(
-            "Undefined property '{}'.\n[line {}]",
-            name.lexeme, name.line
+        throw(RuntimeError::new(
+            name.clone(),
+            format!("Undefined property '{}'.", name.lexeme,),
         ))
     }
 

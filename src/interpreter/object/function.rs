@@ -8,7 +8,7 @@ use trycatch::{catch, throw, CatchError, ExceptionDowncast};
 
 use crate::{
     ar,
-    interpreter::{environment::Environment, Interpreter, ReturnException},
+    interpreter::{environment::Environment, Interpreter, ReturnException, RuntimeError},
     null_obj, obj, stmt,
 };
 
@@ -71,9 +71,10 @@ impl LoxCallable for LoxFunction {
                     if self.is_initializer {
                         self.closure.try_read().unwrap().get_at(&0, "this")
                     } else {
+                        // Exception can be either ReturnException or RuntimeError
                         match e.try_downcast::<ReturnException>() {
                             Ok(ret) => ret.0,
-                            Err(exception) => throw(*exception.downcast::<String>().unwrap()),
+                            Err(exception) => throw(*exception.downcast::<RuntimeError>().unwrap()),
                         }
                     }
                 }

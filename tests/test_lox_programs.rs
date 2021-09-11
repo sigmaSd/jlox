@@ -7,13 +7,6 @@ macro_rules! assert_test_eq {
     };
 }
 
-macro_rules! assert_test_panics {
-    ($name: literal => $expected: literal) => {
-        let output = run_test_with_stderr_output($name)?;
-        assert_eq!(output, $expected, $name);
-    };
-}
-
 macro_rules! test_lox_programs  {
     ($($name: ident)+) => {
         $(
@@ -25,26 +18,11 @@ macro_rules! test_lox_programs  {
         )+
     }
 }
-macro_rules! test_panic_lox_programs  {
-    ($($name: ident)+) => {
-        $(
-        #[test]
-        #[should_panic]
-        fn $name() {
-            let mut lox = Lox::default();
-            lox.run_file(format!("lox_files/{}.lox", stringify!($name))).unwrap();
-        }
-        )+
-    }
-}
 
 test_lox_programs!(hello env fib fun hidden_var fact closure_scope class instance run_class_method class_cake init inherit ssuper);
-//test_panic_lox_programs!(super_with_no_superclass);
 
 #[test]
 fn test_lox_programs() -> Result<()> {
-    //assert_test_panics!("super_with_no_superclass" => "SUPER super
-    //Can't use 'super' in a class with no superclass.");
     assert_test_eq!("ssuper" => "Fry until golden brown.\nPipe full of custard and coat with chocolate.\n");
     assert_test_eq!("inherit" => "Fry until golden brown.\n");
     assert_test_eq!("init" => "Foo instance\n");
@@ -126,12 +104,6 @@ fn run_test_with_output(name: &str) -> Result<String> {
         .output()?;
     Ok(parse_success(String::from_utf8(out.stdout)?))
 }
-fn run_test_with_stderr_output(name: &str) -> Result<String> {
-    let out = std::process::Command::new("cargo")
-        .args(&["t", "-q", "--", "--exact", name, "--nocapture"])
-        .output()?;
-    Ok(parse_panic(String::from_utf8(out.stderr)?))
-}
 
 fn parse_success(stdout: String) -> String {
     const START: &str = "running 1 test\n";
@@ -139,12 +111,4 @@ fn parse_success(stdout: String) -> String {
     let start_idx = stdout.find(START).unwrap() + START.len();
     let end_idx = stdout.find(END).unwrap();
     stdout[start_idx..end_idx].to_owned()
-}
-
-fn parse_panic(stderr: String) -> String {
-    const START: &str = "panicked at '";
-    const END: &str = "', ";
-    let start_idx = stderr.find(START).unwrap() + START.len();
-    let end_idx = stderr.find(END).unwrap();
-    stderr[start_idx..end_idx].to_owned()
 }

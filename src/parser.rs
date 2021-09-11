@@ -2,7 +2,7 @@ use std::fmt;
 use std::sync::atomic::{self, AtomicUsize};
 use std::sync::Arc;
 
-use trycatch::{catch, throw, CatchError};
+use trycatch::{catch, throw, CatchError, Exception};
 
 use crate::expr::{self, Expr};
 use crate::interpreter::{Object, ObjectInner};
@@ -187,12 +187,14 @@ impl Parser {
         let token = token;
         let message = message;
         if token.ttype == TokenType::EOF {
-            throw(format!("[line {}] Error at end: {}", token.line, message));
+            eprintln!("[line {}] Error at end: {}", token.line, message);
+            throw(ParseError)
         } else {
-            throw(format!(
+            eprintln!(
                 "[line {}] Error at '{}': {}",
                 token.line, token.lexeme, message
-            ));
+            );
+            throw(ParseError)
         }
     }
     fn synchronize(&mut self) {
@@ -604,3 +606,5 @@ impl Parser {
         })
     }
 }
+#[derive(Debug, Exception)]
+struct ParseError;

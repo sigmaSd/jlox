@@ -15,7 +15,9 @@ use interpreter::Interpreter;
 use parser::Parser;
 use resolver::Resolver;
 use scanner::Scanner;
-use trycatch::{catch, CatchError};
+use trycatch::{catch, CatchError, ExceptionDowncast};
+
+use crate::interpreter::RuntimeError;
 
 pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -39,11 +41,6 @@ impl Lox {
         if parser.had_error {
             process::exit(65)
         }
-        // let stmts = catch(move || parser.parse());
-        // if let Err(CatchError::Exception(e)) = stmts {
-        //     downcast_exception_print_it_and_return!(65, e => &'static str String);
-        // }
-        // let stmts = stmts.unwrap();
 
         // resolver
         let mut resolver = Resolver::new(self.interpreter.clone());
@@ -54,7 +51,6 @@ impl Lox {
         }
 
         // interpreter
-        // Note: Catch is not very robust, because the fields of the interpreter are still shared
         let mut interpreter = self.interpreter.clone();
         let interpret_result = catch(move || {
             interpreter.interpret(stmts);
@@ -63,7 +59,10 @@ impl Lox {
         match interpret_result {
             Ok(interpreter) => self.interpreter = interpreter,
             Err(CatchError::Exception(e)) => {
-                downcast_exception_print_it_and_return!(70, e => &'static str String);
+                //downcast_exception_print_it_and_return!(70, e => &'static str String);
+                let runtime_error: RuntimeError = e.downcast();
+                eprintln!("{}", runtime_error.to_string());
+                process::exit(70);
             }
             Err(e) => panic!("{:?}", e),
         }

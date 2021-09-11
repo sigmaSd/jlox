@@ -36,7 +36,7 @@ checksum = "3cb00336871be5ed2c8ed44b60ae9959dc5b9f08539422ed43f09e34ecaeba21"
 [[package]]
 name = "trycatch"
 version = "0.1.0"
-source = "git+https://github.com/sigmaSd/trycatch#33a171afede395878bb927503379e9dc93c3bb55"
+source = "git+https://github.com/sigmaSd/trycatch#53f81af1d3448ddfa364a4fbe18df5971b222508"
 dependencies = [
  "trycatch-derive",
 ]
@@ -44,7 +44,7 @@ dependencies = [
 [[package]]
 name = "trycatch-derive"
 version = "0.1.0"
-source = "git+https://github.com/sigmaSd/trycatch#33a171afede395878bb927503379e9dc93c3bb55"
+source = "git+https://github.com/sigmaSd/trycatch#53f81af1d3448ddfa364a4fbe18df5971b222508"
 
 [[package]]
 name = "uuid"

@@ -1,7 +1,9 @@
 use crate::interpreter::object::function::{Clock, LoxFunction};
+use crate::scanner::Token;
 use crate::{ar, downcast, null_obj};
 use crate::{expr, obj, scanner::TokenType, stmt};
 use std::collections::HashMap;
+use std::fmt::Display;
 use std::sync::{Arc, RwLock};
 
 mod environment;
@@ -85,9 +87,9 @@ impl stmt::Visit<()> for Interpreter {
         let superclass = if let Some(ref superclass) = stmt.superclass {
             let superclass = self.evaluate(&superclass.clone().into());
             if !superclass.is_class() {
-                throw(format!(
-                    "Superclass must be a class.\n[line {}]",
-                    stmt.name.line
+                throw(RuntimeError::new(
+                    stmt.clone().superclass.unwrap().name,
+                    "Superclass must be a class.",
                 ))
             }
             Some(superclass)
@@ -159,9 +161,9 @@ impl expr::Visit<Object> for Interpreter {
                 if left.is_str() && right.is_str() {
                     return obj!(downcast!(left => ObjectInner::String) + &downcast!(right => ObjectInner::String) ; ObjectInner::String);
                 }
-                throw(format!(
-                    "Operands must be two numbers or two strings.\n[line {}]",
-                    expr.operator.line
+                throw(RuntimeError::new(
+                    expr.operator.clone(),
+                    "Operands must be two numbers or two strings.",
                 ))
             }
             TokenType::SLASH => {
@@ -265,19 +267,21 @@ impl expr::Visit<Object> for Interpreter {
         }
 
         if !callee.is_fun() {
-            throw(format!(
-                "Can only call functions and classes.\n [line {}]",
-                expr.paren.line
+            throw(RuntimeError::new(
+                expr.paren.clone(),
+                "Can only call functions and classes.",
             ))
         }
 
         let function = crate::downcast_to_lox_callable!(callee);
         if arguemnts.len() != function.try_read().unwrap().arity() {
-            throw(format!(
-                "Expected {} arguments but got {}.\n[line {}]",
-                function.try_read().unwrap().arity(),
-                arguemnts.len(),
-                expr.paren.line,
+            throw(RuntimeError::new(
+                expr.paren.clone(),
+                format!(
+                    "Expected {} arguments but got {}.\n",
+                    function.try_read().unwrap().arity(),
+                    arguemnts.len(),
+                ),
             ))
         }
 
@@ -289,9 +293,9 @@ impl expr::Visit<Object> for Interpreter {
         if let ObjectInner::Instance(instance) = object.0 {
             return instance.get(&expr.name);
         }
-        throw(format!(
-            "Only instances have properties.\n[line {}]",
-            &expr.name.line
+        throw(RuntimeError::new(
+            expr.name.clone(),
+            "Only instances have properties.",
         ))
     }
 
@@ -302,9 +306,9 @@ impl expr::Visit<Object> for Interpreter {
             instance.set(expr.name.clone(), value.clone());
             return value;
         }
-        throw(format!(
-            "Only instances have fields.\n[line {}]",
-            expr.name.line
+        throw(RuntimeError::new(
+            expr.name.clone(),
+            "Only instances have fields.",
         ))
     }
 
@@ -336,9 +340,9 @@ impl expr::Visit<Object> for Interpreter {
                 method.bind(downcast!( object => ObjectInner::Instance)),
             ))))
         } else {
-            throw(format!(
-                "Undefined property '{}'.\n[line {}]",
-                expr.method.lexeme, expr.method.line
+            throw(RuntimeError::new(
+                expr.method.clone(),
+                format!("Undefined property '{}'.", expr.method.lexeme,),
             ))
         }
     }
@@ -353,14 +357,14 @@ fn check_number_operands<'a>(
         return;
     }
     if operators.len() > 1 {
-        throw(format!(
-            "Operands must be numbers.\n[line {}]",
-            operator.line
+        throw(RuntimeError::new(
+            operator.clone(),
+            "Operands must be numbers.",
         ));
     } else {
-        throw(format!(
-            "Operand must be a number.\n[line {}]",
-            operator.line
+        throw(RuntimeError::new(
+            operator.clone(),
+            "Operand must be a number.",
         ));
     }
 }
@@ -438,5 +442,26 @@ fn stringify(obj: Object) -> String {
         text.trim_end_matches(".0").to_string()
     } else {
         obj.to_string()
+    }
+}
+
+#[derive(Debug, Exception)]
+pub struct RuntimeError {
+    token: Token,
+    message: String,
+}
+
+impl RuntimeError {
+    fn new(token: Token, message: impl ToString) -> Self {
+        Self {
+            token,
+            message: message.to_string(),
+        }
+    }
+}
+
+impl Display for RuntimeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}\n[line {}]", self.message, self.token.line)
     }
 }

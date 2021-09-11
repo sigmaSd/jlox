@@ -3,6 +3,7 @@ use std::sync::{Arc, RwLock};
 
 use trycatch::throw;
 
+use crate::interpreter::RuntimeError;
 use crate::{interpreter::Object, scanner::Token};
 
 #[derive(Debug, Clone)]
@@ -34,9 +35,9 @@ impl Environment {
             return obj;
         }
 
-        throw(format!(
-            "Undefined variable '{}'.\n[line {}]",
-            token.lexeme, token.line
+        throw(RuntimeError::new(
+            token.clone(),
+            format!("Undefined variable '{}'.", token.lexeme,),
         ))
     }
     pub fn get_at(&self, distance: &usize, name: &str) -> Object {
@@ -65,9 +66,9 @@ impl Environment {
             enclosing.try_write().unwrap().assign(name, value);
             return;
         }
-        throw(format!(
-            "Undefined variable '{}'.\n[line {}]",
-            name.lexeme, name.line
+        throw(RuntimeError::new(
+            name.clone(),
+            format!("Undefined variable '{}'.", name.lexeme,),
         ))
     }
 

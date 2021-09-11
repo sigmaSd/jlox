@@ -68,7 +68,6 @@ impl PartialEq for Object {
 }
 impl Eq for Object {}
 impl std::hash::Hash for Object {
-    //FIXME: Hashes might collide it leads to very very very subtle bugs
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.1.hash(state)
     }

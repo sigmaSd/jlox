@@ -9,12 +9,9 @@ use std::sync::{Arc, RwLock};
 mod environment;
 use environment::Environment;
 mod object;
-pub use object::Object;
-pub use object::ObjectInner;
+pub use object::{class::LoxClass, Object, ObjectInner};
 
 use trycatch::{throw, Exception};
-
-use self::object::class::LoxClass;
 
 #[derive(Clone, Debug)]
 pub struct Interpreter {
@@ -140,9 +137,6 @@ impl stmt::Visit<()> for Interpreter {
             .assign(stmt.name.clone(), class);
     }
 }
-
-#[derive(Debug, Exception)]
-pub struct ReturnException(Object);
 
 impl expr::Visit<Object> for Interpreter {
     fn visit_binary_expr(&mut self, expr: &crate::expr::Binary) -> Object {
@@ -382,7 +376,6 @@ fn is_truthy(right: &Object) -> bool {
 impl Default for Interpreter {
     fn default() -> Self {
         let globals = Arc::new(RwLock::new(Environment::new(None)));
-        //FIXME
         let environment = globals.clone();
 
         globals.try_write().unwrap().define(
@@ -465,3 +458,6 @@ impl Display for RuntimeError {
         write!(f, "{}\n[line {}]", self.message, self.token.line)
     }
 }
+
+#[derive(Debug, Exception)]
+pub struct ReturnException(Object);

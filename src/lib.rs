@@ -59,7 +59,6 @@ impl Lox {
         match interpret_result {
             Ok(interpreter) => self.interpreter = interpreter,
             Err(CatchError::Exception(e)) => {
-                //downcast_exception_print_it_and_return!(70, e => &'static str String);
                 let runtime_error: RuntimeError = e.downcast();
                 eprintln!("{}", runtime_error.to_string());
                 process::exit(70);
@@ -97,39 +96,4 @@ impl Lox {
         }
         Ok(())
     }
-}
-
-#[macro_export]
-macro_rules! downcast_exception{
-    ($code: expr, $exception: expr => $($type:ty)+) => {
-
-        {
-        let exception = $exception.into_any();
-            if false {
-            }
-        $(
-          else if exception.is::<$type>() {
-              eprintln!("{}",exception.downcast::<$type>().unwrap());
-          }
-         )+
-        }
-
-    };
-}
-#[macro_export]
-macro_rules! downcast_exception_print_it_and_return {
-    ($code: expr, $exception: expr => $($type:ty)+) => {
-
-        {
-        let exception = $exception.into_any();
-        $(
-          if exception.is::<$type>() {
-              eprintln!("{}",exception.downcast::<$type>().unwrap());
-              std::process::exit($code);
-          }
-         )+
-        panic!("Downcasting failed, mismatched type");
-        }
-
-    };
 }

@@ -2,17 +2,18 @@ use std::fmt;
 use std::sync::atomic::{self, AtomicUsize};
 use std::sync::Arc;
 
-use trycatch::{catch, throw, CatchError, Exception};
+use trycatch::{catch, throw, CatchError, Exception, ExceptionDowncast};
 
 use crate::expr::{self, Expr};
 use crate::interpreter::{Object, ObjectInner};
 use crate::scanner::{Token, TokenType};
 use crate::stmt::{self, Stmt};
-use crate::{downcast_exception, null_obj, obj};
+use crate::{null_obj, obj};
 
 #[derive(Clone, Debug)]
 pub struct Parser {
     tokens: Vec<Token>,
+    // Needs to be atomic in order to persist between exceptions
     current: Arc<AtomicUsize>,
     pub had_error: bool,
 }
@@ -316,7 +317,7 @@ impl Parser {
                 Some(stmt)
             }
             Err(CatchError::Exception(e)) => {
-                downcast_exception!(65, e => &'static str String);
+                let _e: ParseError = e.downcast();
                 self.synchronize();
                 None
             }
@@ -445,8 +446,6 @@ impl Parser {
             Some(self.expression_statement())
         };
 
-        //FIXME
-        //self.consume(TokenType::SEMICOLON, "Expect ';' after loop condition.");
         let condition = if !self.check(TokenType::SEMICOLON) {
             Some(self.expression())
         } else {
